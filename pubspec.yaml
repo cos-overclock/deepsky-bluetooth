@@ -1,0 +1,30 @@
+name: deepsky_bluetooth
+description: "A new Flutter package project."
+version: 0.0.1
+publish_to: 'none'
+
+environment:
+  sdk: ^3.12.2
+  flutter: ">=3.44.0"
+
+workspace:
+  - packages/deepsky_bluetooth_interface
+  - packages/deepsky_bluetooth_android_bridge
+  - packages/deepsky_bluetooth_ios_bridge
+  - packages/deepsky_bluetooth_macos_bridge
+  - plugins/deepsky_bluetooth_android
+  - plugins/deepsky_bluetooth_ios
+  - plugins/deepsky_bluetooth_macos
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  steady: ^1.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
