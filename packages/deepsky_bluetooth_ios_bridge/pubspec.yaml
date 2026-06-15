@@ -1,5 +1,5 @@
 name: deepsky_bluetooth_ios_bridge
-description: "A new Flutter package project."
+description: "iOS bridge for deepsky_bluetooth: implements the platform interface by delegating to the deepsky_bluetooth_ios plugin over Pigeon."
 version: 0.0.1
 publish_to: 'none'
 resolution: workspace

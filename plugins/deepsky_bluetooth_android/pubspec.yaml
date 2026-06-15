@@ -1,5 +1,5 @@
 name: deepsky_bluetooth_android
-description: "A new Flutter plugin project."
+description: "Android native implementation for deepsky_bluetooth (Kotlin/Pigeon): BLE scanning, GATT, foreground service, and CompanionDevice support."
 version: 0.0.1
 publish_to: 'none'
 resolution: workspace

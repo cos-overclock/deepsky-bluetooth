@@ -1,5 +1,5 @@
 name: deepsky_bluetooth_interface
-description: "A new Flutter package project."
+description: "Platform-agnostic interface for deepsky_bluetooth: shared models, error types, and the abstract platform contract implemented by the per-platform bridges."
 version: 0.0.1
 publish_to: 'none'
 resolution: workspace

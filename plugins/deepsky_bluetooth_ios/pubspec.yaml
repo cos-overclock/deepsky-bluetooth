@@ -1,5 +1,5 @@
 name: deepsky_bluetooth_ios
-description: "A new Flutter plugin project."
+description: "iOS native implementation for deepsky_bluetooth (CoreBluetooth/Pigeon): BLE scanning, GATT, and background state restoration."
 version: 0.0.1
 publish_to: 'none'
 resolution: workspace

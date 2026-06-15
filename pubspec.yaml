@@ -1,5 +1,5 @@
 name: deepsky_bluetooth
-description: "A new Flutter package project."
+description: "Cross-platform BLE (Bluetooth Low Energy) client for Flutter with a device-oriented API: scanning, connection with auto-reconnect, and GATT operations. Supports foreground and background use on Android, iOS, and macOS."
 version: 0.0.1
 publish_to: 'none'
 
