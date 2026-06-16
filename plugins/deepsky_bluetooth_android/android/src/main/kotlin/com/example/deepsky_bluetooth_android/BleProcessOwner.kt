@@ -113,8 +113,10 @@ object BleProcessOwner {
 
     fun stopScan() {
         val cb = scanCallback ?: return
-        scanCallback = null
+        // scanner を止めてから状態を更新する。stop が失敗した場合は scanning 中のままにし、
+        // 単一 scan 不変条件を壊さない。
         adapter?.bluetoothLeScanner?.stopScan(cb)
+        scanCallback = null
     }
 
     // --- connect / disconnect -------------------------------------------
@@ -203,7 +205,12 @@ object BleProcessOwner {
     /** 利用者による明示的な破棄。ここでのみ接続・scan・adapter 監視を解放する。 */
     fun dispose() {
         stopScan()
-        connections.values.forEach { it.close() }
+        // 接続を閉じるだけでなく epoch も退役させ、dispose 後に遅延 callback が current 扱いで
+        // 新しい sink へ配送されないようにする(Review guide §9)。
+        connections.forEach { (deviceId, connection) ->
+            connection.close()
+            epochs.retire(deviceId)
+        }
         connections.clear()
         val ctx = appContext
         if (adapterReceiverRegistered && ctx != null) {

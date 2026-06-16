@@ -41,7 +41,23 @@ class GattConnection(
         owner.emitConnectionState(
             deviceId, connectionEpoch, ConnectionStateMessage.CONNECTING, null)
         // 自動再接続は body 所有のため autoConnect は常に false(Review guide §8/§14)。
-        gatt = device.connectGatt(context, false, this, BluetoothDevice.TRANSPORT_LE)
+        val g = try {
+            device.connectGatt(context, false, this, BluetoothDevice.TRANSPORT_LE)
+        } catch (e: Exception) {
+            null
+        }
+        if (g == null) {
+            // connectGatt が同期失敗(null 返却/例外)した場合は CONNECTING のまま固まらないよう、
+            // 終端 DISCONNECTED(connectFailed) を通知して owner に epoch を退役させる(Review guide §6)。
+            isConnecting = false
+            isConnected = false
+            owner.emitConnectionState(
+                deviceId, connectionEpoch,
+                ConnectionStateMessage.DISCONNECTED, DisconnectReasonMessage.CONNECT_FAILED)
+            owner.onConnectionClosed(deviceId, connectionEpoch)
+            return
+        }
+        gatt = g
     }
 
     fun disconnect(callback: (Result<Unit>) -> Unit) {
