@@ -85,8 +85,9 @@ class GattConnection(
     /**
      * service/characteristic/descriptor を探索し、探索順に handle を採番した DTO tree を返す。
      *
-     * 同じ UUID の属性も別 handle で区別する。再探索のたびに [handles] を clear して採番し直すため、
-     * 古い tree の handle は new object へ付け替わらず NotFound のままになる(Review guide §11)。
+     * 同じ UUID の属性も別 handle で区別する。再探索を開始した時点で [handles] を clear するため、
+     * 探索中・探索失敗のいずれでも古い tree の handle は new object へ付け替わらず NotFound のまま
+     * になる(Review guide §11)。
      */
     fun discoverServices(callback: (Result<List<ServiceMessage>>) -> Unit) {
         val g = gatt
@@ -99,11 +100,23 @@ class GattConnection(
                 bleError(BleErrorCode.REJECTED, "Service discovery already in progress")))
             return
         }
-        if (!g.discoverServices()) {
+        // discoverServices() は BLUETOOTH_CONNECT が実行時に剥奪されると SecurityException 等を
+        // 投げ得るため、クラッシュさせず FAILED として返す(connect() の connectGatt と同様)。
+        val started = try {
+            g.discoverServices()
+        } catch (e: Exception) {
+            callback(Result.failure(
+                bleError(BleErrorCode.FAILED, "Failed to start service discovery: ${e.message}")))
+            return
+        }
+        if (!started) {
             callback(Result.failure(
                 bleError(BleErrorCode.FAILED, "Failed to start service discovery")))
             return
         }
+        // 再探索を開始した時点で旧 tree の handle を無効化する。counter は戻さないため、進行中も
+        // 失敗時も古い handle は解決できない(Review guide §11)。
+        handles.clear()
         discoverCallback = callback
     }
 
@@ -169,12 +182,12 @@ class GattConnection(
             val callback = discoverCallback ?: return@post
             discoverCallback = null
             if (status != BluetoothGatt.GATT_SUCCESS) {
+                // 探索開始時に clear 済みのため、失敗時は handle が空のまま = 全 handle NotFound。
                 callback(Result.failure(
                     bleError(BleErrorCode.FAILED, "Service discovery failed (status=$status)")))
                 return@post
             }
-            // 再探索でも古い handle が残らないよう、採番し直す前に必ず clear する(Review guide §11)。
-            handles.clear()
+            // handle は discoverServices() 開始時に clear 済み。ここでは探索順に採番し直す。
             callback(Result.success(g.services.map { it.toMessage() }))
         }
     }
