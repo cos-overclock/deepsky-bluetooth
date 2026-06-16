@@ -68,6 +68,9 @@ abstract class DeepskyUuid with _$DeepskyUuid {
 
   /// 128-bit UUID bytes.
   List<int> get bytes => _hexDecode(str128.replaceAll('-', ''));
+
+  @override
+  String toString() => str;
 }
 
 /// Client Characteristic Configuration Descriptor UUID.
