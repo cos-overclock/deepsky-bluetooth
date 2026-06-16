@@ -42,7 +42,7 @@ void main() {
       CharacteristicReadNotConnected() => 'notConnected',
       CharacteristicReadNotFound() => 'notFound',
       CharacteristicReadNotSupported() => 'notSupported',
-      CharacteristicReadAmbiguousWhileNotifying() => 'ambiguous',
+      CharacteristicReadAmbiguousWhileNotifying() => 'readAmbiguousWhileNotifying',
       CharacteristicReadFailed() => 'failed',
     };
 
