@@ -13,17 +13,21 @@ class DeepskyBluetoothAndroidPlugin : FlutterPlugin {
     private var callbacks: BleCallbacksApi? = null
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
-        BleProcessOwner.attach(binding.applicationContext)
-        val cb = BleCallbacksApi(binding.binaryMessenger)
-        BleProcessOwner.registerSink(cb)
-        callbacks = cb
-        BleHostApi.setUp(binding.binaryMessenger, BleCentralManager(binding.applicationContext))
+        BleNativeObservers.observeMethod("plugin.attach") {
+            BleProcessOwner.attach(binding.applicationContext)
+            val cb = BleCallbacksApi(binding.binaryMessenger)
+            BleProcessOwner.registerSink(cb)
+            callbacks = cb
+            BleHostApi.setUp(binding.binaryMessenger, BleCentralManager(binding.applicationContext))
+        }
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
-        BleHostApi.setUp(binding.binaryMessenger, null)
-        // engine 固有 sink だけを解除。接続・scan・epoch は owner が保持し続ける(close しない)。
-        callbacks?.let { BleProcessOwner.unregisterSink(it) }
-        callbacks = null
+        BleNativeObservers.observeMethod("plugin.detach") {
+            BleHostApi.setUp(binding.binaryMessenger, null)
+            // engine 固有 sink だけを解除。接続・scan・epoch は owner が保持し続ける(close しない)。
+            callbacks?.let { BleProcessOwner.unregisterSink(it) }
+            callbacks = null
+        }
     }
 }
