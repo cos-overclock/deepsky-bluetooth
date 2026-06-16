@@ -40,6 +40,17 @@ internal class HeadlessLifecycleStateTest {
     }
 
     @Test
+    fun headlessSurvivesUiAttachAndIsDestroyedOnlyAtAck() {
+        HeadlessLifecycleState.onHeadlessStarted()
+        // A UI engine attaching must NOT tear the headless engine down (Review guide §12: keep the
+        // active sink until the handover ack).
+        HeadlessLifecycleState.onUiEngineCandidateAttached()
+        assertTrue(HeadlessLifecycleState.isHeadlessAlive)
+        assertTrue(HeadlessLifecycleState.onUiHandoverAcknowledged())
+        assertFalse(HeadlessLifecycleState.isHeadlessAlive)
+    }
+
+    @Test
     fun headlessDetachClearsAliveAndNeverRelaunches() {
         HeadlessLifecycleState.onHeadlessStarted()
         val relaunch = HeadlessLifecycleState.onEngineDetached(
