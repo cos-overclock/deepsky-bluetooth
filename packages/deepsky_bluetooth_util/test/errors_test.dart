@@ -130,6 +130,73 @@ void main() {
     );
   });
 
+  test('errors can preserve a cause and stack trace', () {
+    final cause = StateError('native failure');
+    final stackTrace = StackTrace.current;
+
+    final errors = <DeepskyBluetoothError>[
+      BackgroundNotSupported(cause: cause, stackTrace: stackTrace),
+      BackgroundConfigMissing(cause: cause, stackTrace: stackTrace),
+      AlreadyInitialized(cause: cause, stackTrace: stackTrace),
+      UnsupportedPlatform(cause: cause, stackTrace: stackTrace),
+      InitializeFailed('failed', cause: cause, stackTrace: stackTrace),
+      ScanPermissionDenied(cause: cause, stackTrace: stackTrace),
+      ScanBluetoothOff(cause: cause, stackTrace: stackTrace),
+      ScanBluetoothUnavailable(cause: cause, stackTrace: stackTrace),
+      ScanAlreadyScanning(cause: cause, stackTrace: stackTrace),
+      ScanFailed('failed', cause: cause, stackTrace: stackTrace),
+      ConnectPermissionDenied(cause: cause, stackTrace: stackTrace),
+      ConnectBluetoothOff(cause: cause, stackTrace: stackTrace),
+      ConnectBluetoothUnavailable(cause: cause, stackTrace: stackTrace),
+      ConnectDeviceNotFound(cause: cause, stackTrace: stackTrace),
+      ConnectTimeout(cause: cause, stackTrace: stackTrace),
+      ConnectFailed('failed', cause: cause, stackTrace: stackTrace),
+      DisconnectNotConnected(cause: cause, stackTrace: stackTrace),
+      DisconnectFailed('failed', cause: cause, stackTrace: stackTrace),
+      DiscoverServicesNotConnected(cause: cause, stackTrace: stackTrace),
+      DiscoverServicesFailed('failed', cause: cause, stackTrace: stackTrace),
+      CharacteristicReadNotConnected(cause: cause, stackTrace: stackTrace),
+      CharacteristicReadNotFound(cause: cause, stackTrace: stackTrace),
+      CharacteristicReadNotSupported(cause: cause, stackTrace: stackTrace),
+      CharacteristicReadAmbiguousWhileNotifying(
+        cause: cause,
+        stackTrace: stackTrace,
+      ),
+      CharacteristicReadFailed('failed', cause: cause, stackTrace: stackTrace),
+      CharacteristicWriteNotConnected(cause: cause, stackTrace: stackTrace),
+      CharacteristicWriteNotFound(cause: cause, stackTrace: stackTrace),
+      CharacteristicWriteNotSupported(cause: cause, stackTrace: stackTrace),
+      CharacteristicWriteBufferFull(cause: cause, stackTrace: stackTrace),
+      CharacteristicWriteFailed('failed', cause: cause, stackTrace: stackTrace),
+      NotifyNotConnected(cause: cause, stackTrace: stackTrace),
+      NotifyNotFound(cause: cause, stackTrace: stackTrace),
+      NotifyNotSupported(cause: cause, stackTrace: stackTrace),
+      NotifyFailed('failed', cause: cause, stackTrace: stackTrace),
+      DescriptorReadNotConnected(cause: cause, stackTrace: stackTrace),
+      DescriptorReadNotFound(cause: cause, stackTrace: stackTrace),
+      DescriptorReadFailed('failed', cause: cause, stackTrace: stackTrace),
+      DescriptorWriteNotConnected(cause: cause, stackTrace: stackTrace),
+      DescriptorWriteNotFound(cause: cause, stackTrace: stackTrace),
+      DescriptorWriteFailed('failed', cause: cause, stackTrace: stackTrace),
+      MtuNotConnected(cause: cause, stackTrace: stackTrace),
+      MtuFailed('failed', cause: cause, stackTrace: stackTrace),
+      RssiNotConnected(cause: cause, stackTrace: stackTrace),
+      RssiFailed('failed', cause: cause, stackTrace: stackTrace),
+      AssociateNotSupported(cause: cause, stackTrace: stackTrace),
+      AssociateRejected(cause: cause, stackTrace: stackTrace),
+      AssociateFailed('failed', cause: cause, stackTrace: stackTrace),
+      PresenceNotSupported(cause: cause, stackTrace: stackTrace),
+      PresenceNotAssociated(cause: cause, stackTrace: stackTrace),
+      PresenceFailed('failed', cause: cause, stackTrace: stackTrace),
+      DisposeFailed('failed', cause: cause, stackTrace: stackTrace),
+    ];
+
+    for (final error in errors) {
+      expect(error.cause, same(cause), reason: '$error cause');
+      expect(error.stackTrace, same(stackTrace), reason: '$error stackTrace');
+    }
+  });
+
   test('BleErrorCode exposes stable native protocol strings', () {
     expect(BleErrorCode.permissionDenied, 'permissionDenied');
     expect(BleErrorCode.bluetoothOff, 'bluetoothOff');
