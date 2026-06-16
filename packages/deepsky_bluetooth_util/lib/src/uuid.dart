@@ -68,17 +68,6 @@ abstract class DeepskyUuid with _$DeepskyUuid {
 
   /// 128-bit UUID bytes.
   List<int> get bytes => _hexDecode(str128.replaceAll('-', ''));
-
-  /// Deprecated alias for [str128].
-  @Deprecated('use str128 instead')
-  String get uuid128 => str128;
-
-  /// Deprecated alias for [str].
-  @Deprecated('use str instead')
-  String get uuid => str;
-
-  @override
-  String toString() => str;
 }
 
 /// Client Characteristic Configuration Descriptor UUID.
