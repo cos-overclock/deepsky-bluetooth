@@ -235,6 +235,28 @@ class CompanionDeviceController(
         }
     }
 
+    /**
+     * 既存の関連付け一覧を純粋層が扱える [CompanionAssociationResolver.AssociationEntry] へ写す。
+     * `getMyAssociations()` / `AssociationInfo.getId()` は API 33+ のため、31-32 や CDM 不在では
+     * 空リストを返す。`CompanionDeviceService`（#27）の 33-35 / 36+ presence 正規化が associationId
+     * 逆引きに使う。
+     */
+    @SuppressLint("NewApi")
+    fun associationEntries(): List<CompanionAssociationResolver.AssociationEntry> {
+        val cdm = manager ?: return emptyList()
+        // AssociationInfo（id / deviceMacAddress）は API 33+。31-32 は String 経路のみで逆引き不要。
+        if (generation.associateApi != CompanionApiGeneration.AssociateApi.MODERN_33_PLUS) {
+            return emptyList()
+        }
+        return try {
+            cdm.myAssociations.map {
+                CompanionAssociationResolver.AssociationEntry(it.id, it.deviceMacAddress?.toString())
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
     @SuppressLint("NewApi")
     private fun observeByAssociationId(
         cdm: CompanionDeviceManager,
@@ -242,9 +264,7 @@ class CompanionDeviceController(
         enabled: Boolean,
     ) {
         val associationId = CompanionAssociationResolver.resolveAssociationId(
-            cdm.myAssociations.map {
-                CompanionAssociationResolver.AssociationEntry(it.id, it.deviceMacAddress?.toString())
-            },
+            associationEntries(),
             deviceId,
         ) ?: throw bleError(
             BleErrorCode.NOT_ASSOCIATED, "No association for device $deviceId")

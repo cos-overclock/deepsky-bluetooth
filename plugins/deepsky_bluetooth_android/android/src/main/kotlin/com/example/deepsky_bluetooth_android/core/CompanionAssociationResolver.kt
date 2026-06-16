@@ -22,4 +22,13 @@ object CompanionAssociationResolver {
             DeviceAddressNormalizer.normalize(entry.deviceAddress) == target
         }?.associationId
     }
+
+    /**
+     * 逆引き: 対象 associationId に一致する entry の正準 deviceId。一致が無い、または一致 entry の
+     * `deviceAddress` が非公開/不正なら null。36+ の presence event が associationId だけを運ぶため使う。
+     */
+    fun resolveDeviceId(associations: List<AssociationEntry>, associationId: Int): String? {
+        val entry = associations.firstOrNull { it.associationId == associationId } ?: return null
+        return DeviceAddressNormalizer.normalize(entry.deviceAddress)
+    }
 }

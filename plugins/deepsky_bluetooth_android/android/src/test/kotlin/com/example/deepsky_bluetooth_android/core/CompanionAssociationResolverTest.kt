@@ -71,4 +71,54 @@ internal class CompanionAssociationResolverTest {
     fun resolve_returnsNullForEmptyAssociations() {
         assertNull(CompanionAssociationResolver.resolveAssociationId(emptyList(), "11:11:11:11:11:11"))
     }
+
+    // --- resolveDeviceId (逆引き: associationId -> deviceId) ---
+
+    @Test
+    fun resolveDeviceId_returnsCanonicalAddressForMatchingId() {
+        val associations = listOf(
+            AssociationEntry(associationId = 7, deviceAddress = "aa:bb:cc:dd:ee:ff"),
+        )
+
+        // 一致 id の deviceAddress を正準形へ正規化して返す。
+        assertEquals("AA:BB:CC:DD:EE:FF", CompanionAssociationResolver.resolveDeviceId(associations, 7))
+    }
+
+    @Test
+    fun resolveDeviceId_picksTheMatchingIdAmongMany() {
+        val associations = listOf(
+            AssociationEntry(associationId = 1, deviceAddress = "11:11:11:11:11:11"),
+            AssociationEntry(associationId = 2, deviceAddress = "22:22:22:22:22:22"),
+        )
+
+        assertEquals("22:22:22:22:22:22", CompanionAssociationResolver.resolveDeviceId(associations, 2))
+    }
+
+    @Test
+    fun resolveDeviceId_returnsNullWhenNoIdMatches() {
+        val associations = listOf(
+            AssociationEntry(associationId = 1, deviceAddress = "11:11:11:11:11:11"),
+        )
+
+        assertNull(CompanionAssociationResolver.resolveDeviceId(associations, 99))
+    }
+
+    @Test
+    fun resolveDeviceId_returnsNullWhenMatchingEntryHasNoAddress() {
+        // id は一致するが address 非公開の関連付けは deviceId 解決不能。
+        val associations = listOf(
+            AssociationEntry(associationId = 5, deviceAddress = null),
+        )
+
+        assertNull(CompanionAssociationResolver.resolveDeviceId(associations, 5))
+    }
+
+    @Test
+    fun resolveDeviceId_returnsNullWhenMatchingAddressIsMalformed() {
+        val associations = listOf(
+            AssociationEntry(associationId = 5, deviceAddress = "not-a-mac"),
+        )
+
+        assertNull(CompanionAssociationResolver.resolveDeviceId(associations, 5))
+    }
 }
