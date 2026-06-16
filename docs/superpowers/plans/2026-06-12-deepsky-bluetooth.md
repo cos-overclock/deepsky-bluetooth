@@ -36,11 +36,16 @@
 > | 再接続失敗 | Observerのみ | `connectionStates` の `disconnected(reason)`。終端理由は自動再接続停止 | Task 3,5,6-8,17-19 |
 > | servicesキャッシュ | 再接続後も残り得る | epoch退役時にnull、新epochの探索/resyncでのみ再設定 | Task 17 |
 > | handoverバッファ | 無制限 | 256件または30秒、古いnotify/presenceから破棄しObserver警告 | Task 9,11-13 |
+> | Observer | 汎用 `onMethodStart/onMethodEnd/onCallback` 1型 | **共通 `DeepskyBluetoothCommonObserver` と platform native observer を分離**。各メソッドは `onXxxStart/onXxxEnd`、各 callback は `onXxx` の型付き no-op hook。root から `DeepskyBluetoothObservers(common/android/ios/macos)` で複数指定可 | Task 5,9,12,13,17 |
 > | エンジン所有 | 1エンジン1インスタンス | プロセスグローバル owner + `attach→Dart ready→resync→ack` | Task 9,11,17 |
 > | ヘッドレス復活 | `main()` 再実行 | **専用 `@pragma('vm:entry-point')` エントリポイント**実行 | Task 11,17,18 |
 > | CompanionDevice | deprecated 直書き(2分岐) | `CompanionDeviceController` で **31–32/33–35/36+ の3分岐**統合 | Task 11 |
 >
 > 各タスク冒頭の **[spec反映]** 注記も参照すること。
+> Observer については本表と「設計ルール」の Observer 項目を正とする。旧コードスケッチ内の
+> `DeepskyBluetoothObserver`、`observer:`、`onMethodStart`、`onMethodEnd`、`onCallback` は
+> 非規範の旧案であり、実装時は `DeepskyBluetoothCommonObserver`、
+> `DeepskyBluetoothObservers`、および platform native observer の型付き hook へ置換する。
 
 ---
 
@@ -56,7 +61,7 @@
 
 ## 設計ルール
 
-- **インスタンス化API:** 利用者は `DeepskyBluetooth.foreground({observer})` / `DeepskyBluetooth.background({ios, android, observer})` で生成する(モードはメソッド名で明示)。`DeepskyBluetoothConfig` は本体→bridge→ネイティブ間の内部転送型であり、利用者が直接組み立てるのは `IosBackgroundConfig` / `AndroidBackgroundConfig`(FGS/CompanionDeviceのsealed)のみ。
+- **インスタンス化API:** 利用者は `DeepskyBluetooth.foreground({observers})` / `DeepskyBluetooth.background({ios, android, observers})` で生成する(モードはメソッド名で明示)。`observers` は `DeepskyBluetoothObservers` で、`common` / `android` / `ios` / `macos` に複数 observer を指定できる。root package 経由でも native 側ログを見られるよう platform native observer も受け取る。実行中 platform 以外の native observer は無視する。`DeepskyBluetoothConfig` は本体→bridge→ネイティブ間の内部転送型であり、利用者が直接組み立てるのは `IosBackgroundConfig` / `AndroidBackgroundConfig`(FGS/CompanionDeviceのsealed)のみ。
 - **ライフサイクル:** 同一Dart isolate内で同時に生成できるインスタンスは1つ。2つ目は `AlreadyInitialized`。
   別engineからの初期化はheadless→UI handoverとして拒否せず、native ownerの候補sinkになる。
   sink切替は **engine attach(候補) → `BleCallbacksApi.setUp` → `notifyDartReady(engineToken)` →
@@ -73,7 +78,7 @@
   `didFailToConnect`はconnectFailedとして継続する。presenceObservationDisabledはC必須の
   headless復活時だけ終端で、engine生存中の監視無効化はAへ切り替える。
   一時切断時だけ`disconnected(reason)`→`reconnecting`を一度発行し、reconnecting中の各試行失敗は
-  Observerへ記録して状態イベントを反復しない。
+  common/native observer へ記録して状態イベントを反復しない。
 - **[spec反映] attempt/callback順序:** native `connect` はattempt arm時点で
   `ConnectionAttempt{epoch}`を即返す。bridgeはbodyのconnect Future完了前に届いた同epoch callbackを
   短期保留し、epoch設定後に順序どおり解放する。
@@ -98,10 +103,10 @@
 | `failed` | その他(messageに詳細) |
 
 - **UUID表記:** Dart境界では128bit完全形式・小文字の文字列に統一。正規化ロジックは util の `BleUuid.normalize`(16/32bit短縮形の展開+小文字化)に置き、bridgeのconvertersがネイティブへ渡す前に適用する。CCCD等の既知UUID定数も `BleUuid` に置く。Kotlinは `UUID.toString()` がそのまま準拠。SwiftはCBUUIDの短縮形を128bitへ展開するヘルパーを通す。
-- **Observer:** interfaceパッケージにDartの `DeepskyBluetoothObserver`(onMethodStart/onMethodEnd/onCallback)を定義。bridgeと本体パッケージはそれを受け取りフックを呼ぶ。各プラグインはネイティブObserver(Kotlin interface / Swiftプロトコル、デフォルトはLogcat/os_log実装、静的レジストリで差し替え可能)を定義する。
+- **Observer:** observer は共通 Dart contract 用と platform native 用を分離する。interface パッケージには `DeepskyBluetoothCommonObserver` を定義し、各メソッドごとの `onXxxStart` / `onXxxEnd` と各 callback ごとの `onXxx` を型付き no-op method として公開する。各 plugin には `DeepskyBluetoothAndroidObserver` / `DeepskyBluetoothIosObserver` / `DeepskyBluetoothMacosObserver` を定義し、native owner、GATT queue、epoch、handle、sink handover など platform 固有診断を扱う。root package には `DeepskyBluetoothObservers` を定義し、common/native observer をそれぞれ複数指定できるようにする。各 list は登録順に呼び、observer 例外は BLE 操作本体と後続 observer を止めない。
 - **スキャンフィルタ/オプション:** フィルタは `DeepskyScanFilter`(address / name / manufactureData / serviceData / serviceUuid×2形式の各リスト)。**各エントリはOR条件**(いずれか1つにマッチで通過、全リスト空ならフィルタなし)で、AndroidのScanFilterリスト(1エントリ=1 ScanFilter)に1:1対応する。Androidは全カテゴリをネイティブフィルタで実施。iOS/macOSはserviceUuidのみネイティブ対応(かつserviceUuid単独指定時のみ適用)で、**非対応カテゴリはネイティブ側didDiscover内のソフトウェアフィルタ**で判定する。manufactureData/serviceDataのdata照合は前方一致(Androidのmask省略時挙動に合わせる)。スキャン設定は `DeepskyScanOptions`(`android`: ScanSettings相当 / `darwin`: allowDuplicates・solicitedServiceUuids)として `startScan` に渡す。`DeepskyAndroidScanType`(active/passive)はAndroidの公開APIに存在しない(hidden API)ため対象外。
 - **権限要求はアプリ責務:** ライブラリは権限チェックのみ行い `permissionDenied` を返す。要求UIは出さない。
-- **コールバック→Dart:** Pigeon `@FlutterApi` でネイティブ→Dartへpush。bridgeが `Stream` として公開。ネイティブはDartの準備完了(`notifyDartReady`)までイベントをバッファする(iOS復元イベント、Android CDSイベント)。上限は256件または30秒で、古いnotify/presenceから破棄してObserverへ警告する。**[spec反映]** 値イベントは notify/indicate **専用**(read 応答はキュー経由で戻り値)。
+- **コールバック→Dart:** Pigeon `@FlutterApi` でネイティブ→Dartへpush。bridgeが `Stream` として公開。ネイティブはDartの準備完了(`notifyDartReady`)までイベントをバッファする(iOS復元イベント、Android CDSイベント)。上限は256件または30秒で、古いnotify/presenceから破棄して common/native observer へ警告する。**[spec反映]** 値イベントは notify/indicate **専用**(read 応答はキュー経由で戻り値)。
 - **[spec反映] Isolate/エンジン方針:** native BLE ownerはプロセスグローバルで接続・epoch・操作キューを保持する。
   engine detachでは候補/active sinkだけを解除し、GATT接続をcloseしない。UI engineがattachしても直ちに
   headlessを破棄せず、`notifyDartReady` とstate resyncのack完了後にのみ旧headless engineを破棄する。
@@ -156,7 +161,8 @@ packages/deepsky_bluetooth_interface/lib/
   src/models.dart  src/config.dart  src/observer.dart  src/platform.dart
 plugins/deepsky_bluetooth_android/
   pigeons/messages.dart                   # Pigeon定義
-  lib/deepsky_bluetooth_android.dart      # export 'src/messages.g.dart'
+  lib/deepsky_bluetooth_android.dart      # export 'src/messages.g.dart' と Dart native observer
+  lib/src/observer.dart                   # DeepskyBluetoothAndroidObserver
   lib/src/messages.g.dart                 # 生成物
   android/src/main/kotlin/com/example/deepsky_bluetooth_android/
     Messages.g.kt(生成物) DeepskyBluetoothAndroidPlugin.kt BleCentralManager.kt
@@ -166,15 +172,18 @@ plugins/deepsky_bluetooth_android/
   android/src/main/AndroidManifest.xml    # 権限+Service宣言
 plugins/deepsky_bluetooth_ios/
   pigeons/messages.dart  lib/deepsky_bluetooth_ios.dart  lib/src/messages.g.dart
+  lib/src/observer.dart                   # DeepskyBluetoothIosObserver
   ios/deepsky_bluetooth_ios/Sources/deepsky_bluetooth_ios/
     Messages.g.swift(生成物) DeepskyBluetoothIosPlugin.swift BleCentralController.swift
     DeepskyBluetoothIosObserver.swift
 plugins/deepsky_bluetooth_macos/ (iOSと同構成、State Restorationなし)
+  lib/src/observer.dart                   # DeepskyBluetoothMacosObserver
 packages/deepsky_bluetooth_android_bridge/lib/
   deepsky_bluetooth_android_bridge.dart  src/bridge.dart  src/converters.dart  src/error_mapper.dart
 packages/deepsky_bluetooth_ios_bridge/ (同構成)
 packages/deepsky_bluetooth_macos_bridge/ (同構成)
 lib/deepsky_bluetooth.dart                  # export(lifecycle の公開API)
+lib/src/observers.dart                      # common/native observer list bundle
 lib/src/transport/                          # 将来 deepsky_bluetooth_core へ抽出
   ble_transport.dart                        # lifecycle 用の内部抽象ポート
   transport_impl.dart                       # DeepskyBluetoothPlatform を選択・ラップ
@@ -1501,7 +1510,7 @@ git add packages/deepsky_bluetooth_interface && git commit -m "feat(interface): 
 
 ---
 
-### Task 5: interface — Observer と Platform 抽象クラス
+### Task 5: interface — Common Observer と Platform 抽象クラス
 
 > **[spec反映] platform 抽象を以下に合わせる**(接続状態マシン・再接続・タイムアウトは body 専任。platform は素の操作のみ):
 > - 探索戻り値を `Result<List<BleServiceInfo>, …>` に(`BleService`→`BleServiceInfo`)。
@@ -1523,7 +1532,7 @@ git add packages/deepsky_bluetooth_interface && git commit -m "feat(interface): 
 
 - [ ] **Step 1: 失敗するテストを書く**
 
-`test/platform_test.dart`(抽象クラスを実装できること・Observerフックの形を確認):
+`test/platform_test.dart`(抽象クラスを実装できること・Common Observerフックの形を確認):
 
 ```dart
 import 'dart:typed_data';
@@ -1532,17 +1541,18 @@ import 'package:deepsky_bluetooth_interface/deepsky_bluetooth_interface.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:steady/steady.dart';
 
-final class _RecordingObserver implements DeepskyBluetoothObserver {
+final class _RecordingObserver extends DeepskyBluetoothCommonObserver {
   final calls = <String>[];
   @override
-  void onMethodStart(String methodName, Map<String, Object?> arguments) =>
-      calls.add('start:$methodName');
+  void onConnectStart(DeepskyDeviceId deviceId) =>
+      calls.add('connect-start:$deviceId');
   @override
-  void onMethodEnd(String methodName, Result<Object?, Exception> result) =>
-      calls.add('end:$methodName:${result.isOk}');
+  void onConnectEnd(DeepskyDeviceId deviceId,
+          Result<ConnectionAttempt, ConnectError> result) =>
+      calls.add('connect-end:$deviceId:${result.ok?.connectionEpoch}');
   @override
-  void onCallback(String callbackName, Object? payload) =>
-      calls.add('cb:$callbackName');
+  void onNotifyEvent(BleNotifyEvent event) =>
+      calls.add('notify:${event.deviceId}:${event.connectionEpoch}:${event.characteristicHandle}');
 }
 
 final class _FakePlatform extends DeepskyBluetoothPlatform {
@@ -1645,12 +1655,20 @@ void main() {
     expect((await p.requestMtu(const DeepskyDeviceId('id'), 1, 247)).ok, 23);
   });
 
-  test('observer hooks record lifecycle', () {
+  test('common observer hooks record typed lifecycle and callbacks', () {
     final o = _RecordingObserver();
-    o.onMethodStart('connect', {'deviceId': 'x'});
-    o.onMethodEnd('connect', const Result.ok(null));
-    o.onCallback('scanResults', null);
-    expect(o.calls, ['start:connect', 'end:connect:true', 'cb:scanResults']);
+    o.onConnectStart(const DeepskyDeviceId('x'));
+    o.onConnectEnd(
+      const DeepskyDeviceId('x'),
+      const Result.ok(ConnectionAttempt(connectionEpoch: 1)),
+    );
+    o.onNotifyEvent(BleNotifyEvent(
+      deviceId: const DeepskyDeviceId('x'),
+      connectionEpoch: 1,
+      characteristicHandle: 2,
+      value: Uint8List(0),
+    ));
+    expect(o.calls, ['connect-start:x', 'connect-end:x:1', 'notify:x:1:2']);
   });
 }
 ```
@@ -1661,17 +1679,31 @@ Run: `flutter test test/platform_test.dart` → コンパイルエラーで FAIL
 
 - [ ] **Step 3: observer.dart を実装**
 
-`lib/src/observer.dart` 全文:
+`lib/src/observer.dart` の要点:
 
 ```dart
+import 'dart:typed_data';
+
+import 'package:deepsky_bluetooth_util/deepsky_bluetooth_util.dart';
 import 'package:steady/steady.dart';
 
-/// 各メソッドの開始・終了と、ネイティブ→Dartコールバックの発火タイミングで
-/// 呼び出されるユーザー定義フック。
-abstract interface class DeepskyBluetoothObserver {
-  void onMethodStart(String methodName, Map<String, Object?> arguments);
-  void onMethodEnd(String methodName, Result<Object?, Exception> result);
-  void onCallback(String callbackName, Object? payload);
+import 'config.dart';
+import 'models.dart';
+
+/// 共通 Dart contract 用 observer。必要な hook だけ override する。
+class DeepskyBluetoothCommonObserver {
+  const DeepskyBluetoothCommonObserver();
+
+  void onConnectStart(DeepskyDeviceId deviceId) {}
+  void onConnectEnd(
+    DeepskyDeviceId deviceId,
+    Result<ConnectionAttempt, ConnectError> result,
+  ) {}
+  void onNotifyEvent(BleNotifyEvent event) {}
+
+  // 実装では initialize/startScan/disconnect/discover/read/write/setNotify/
+  // descriptor/mtu/rssi/associate/presence/dispose の各 onXxxStart/onXxxEnd と、
+  // scan/connection/notify/adapter/restoration/state-resync callback hook を全て定義する。
 }
 ```
 
