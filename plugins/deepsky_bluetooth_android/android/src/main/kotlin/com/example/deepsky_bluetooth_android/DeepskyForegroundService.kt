@@ -16,7 +16,6 @@ class DeepskyForegroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val notificationConfig = intent.toNotificationConfig()
-        ForegroundServiceState.markServiceRunning(notificationConfig)
 
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(
@@ -27,11 +26,21 @@ class DeepskyForegroundService : Service() {
             ),
         )
 
-        startForeground(
-            NOTIFICATION_ID,
-            buildNotification(notificationConfig),
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
-        )
+        try {
+            startForeground(
+                NOTIFICATION_ID,
+                buildNotification(notificationConfig),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
+            )
+        } catch (error: RuntimeException) {
+            // startForeground can fail (invalid notification/channel or FGS start not allowed);
+            // keep the process-wide state honest instead of claiming the service is running.
+            ForegroundServiceState.markStopRequested()
+            stopSelf()
+            throw error
+        }
+
+        ForegroundServiceState.markServiceRunning(notificationConfig)
         return START_STICKY
     }
 
