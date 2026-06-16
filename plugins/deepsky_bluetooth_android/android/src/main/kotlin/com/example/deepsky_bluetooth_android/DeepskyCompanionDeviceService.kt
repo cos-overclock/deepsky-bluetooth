@@ -14,8 +14,10 @@ import android.companion.DevicePresenceEvent
  * の受け口へ転送するだけの薄い adapter に保つ。正規化(単一内部 event 化)・配送・buffer は owner と
  * 純粋層(`core/`)が行う。`@Deprecated` / `@SuppressLint` はここに隔離する。
  *
- * 本 PR(#27)では event の正規化・保持・配送までを担う。headless `FlutterEngine` の実生成は
- * background handle 登録(Task 17)に依存するため後続 #29 で追加し、ここに `ensureEngine` を差し込む。
+ * event を [BleProcessOwner] へ転送する前に、[HeadlessEngineLauncher] で headless `FlutterEngine`
+ * を復活させる(#28)。process 死後はここがシステムから起動される唯一の入口になるため、保存済み
+ * background handle があれば Dart を再生成して再接続できるようにする(`main()`/`runApp()` は実行
+ * しない。Review guide §12)。handle 未登録なら launcher 側で起動を抑止する。
  */
 class DeepskyCompanionDeviceService : CompanionDeviceService() {
 
@@ -25,6 +27,7 @@ class DeepskyCompanionDeviceService : CompanionDeviceService() {
     @Suppress("OVERRIDE_DEPRECATION")
     override fun onDeviceAppeared(address: String) {
         BleProcessOwner.ensureAttached(applicationContext)
+        HeadlessEngineLauncher.ensureEngine(applicationContext)
         BleProcessOwner.onCompanionDeviceAppeared(address)
     }
 
@@ -32,6 +35,7 @@ class DeepskyCompanionDeviceService : CompanionDeviceService() {
     @Suppress("OVERRIDE_DEPRECATION")
     override fun onDeviceDisappeared(address: String) {
         BleProcessOwner.ensureAttached(applicationContext)
+        HeadlessEngineLauncher.ensureEngine(applicationContext)
         BleProcessOwner.onCompanionDeviceDisappeared(address)
     }
 
@@ -40,6 +44,7 @@ class DeepskyCompanionDeviceService : CompanionDeviceService() {
     @SuppressLint("NewApi")
     override fun onDeviceAppeared(associationInfo: AssociationInfo) {
         BleProcessOwner.ensureAttached(applicationContext)
+        HeadlessEngineLauncher.ensureEngine(applicationContext)
         BleProcessOwner.onCompanionAssociationEvent(
             deviceAddress = associationInfo.deviceMacAddress?.toString(),
             associationId = associationInfo.id,
@@ -50,6 +55,7 @@ class DeepskyCompanionDeviceService : CompanionDeviceService() {
     @SuppressLint("NewApi")
     override fun onDeviceDisappeared(associationInfo: AssociationInfo) {
         BleProcessOwner.ensureAttached(applicationContext)
+        HeadlessEngineLauncher.ensureEngine(applicationContext)
         BleProcessOwner.onCompanionAssociationEvent(
             deviceAddress = associationInfo.deviceMacAddress?.toString(),
             associationId = associationInfo.id,
@@ -62,6 +68,7 @@ class DeepskyCompanionDeviceService : CompanionDeviceService() {
     @SuppressLint("NewApi")
     override fun onDevicePresenceEvent(event: DevicePresenceEvent) {
         BleProcessOwner.ensureAttached(applicationContext)
+        HeadlessEngineLauncher.ensureEngine(applicationContext)
         BleProcessOwner.onCompanionPresenceEvent(
             associationId = event.associationId,
             eventType = event.event,
