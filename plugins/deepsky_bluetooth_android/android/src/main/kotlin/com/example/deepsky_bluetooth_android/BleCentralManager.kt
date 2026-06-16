@@ -5,8 +5,8 @@ import android.content.Context
 /**
  * Flutter からの [BleHostApi] 呼び出しをプロセスグローバルな [BleProcessOwner] へ委譲する。
  *
- * scan / connect / disconnect / service discovery を [BleProcessOwner] へ委譲する。
- * スコープ外メソッド(read / write / notify / descriptor / MTU / RSSI / associate /
+ * scan / connect / disconnect / service discovery / GATT operations(read / write / notify /
+ * descriptor / MTU / RSSI)を [BleProcessOwner] へ委譲する。残るスコープ外メソッド(associate /
  * presence / background)は、後続 issue で本実装に置き換える前提の暫定エラーを返す。
  */
 class BleCentralManager(private val context: Context) : BleHostApi {
@@ -53,44 +53,44 @@ class BleCentralManager(private val context: Context) : BleHostApi {
         target: CharacteristicTargetMessage,
         strictRead: Boolean,
         callback: (Result<ByteArray>) -> Unit,
-    ) = callback(notImplemented("readCharacteristic", "#23"))
+    ) = BleProcessOwner.readCharacteristic(target, strictRead, callback)
 
     override fun writeCharacteristic(
         target: CharacteristicTargetMessage,
         value: ByteArray,
         withResponse: Boolean,
         callback: (Result<Unit>) -> Unit,
-    ) = callback(notImplemented("writeCharacteristic", "#23"))
+    ) = BleProcessOwner.writeCharacteristic(target, value, withResponse, callback)
 
     override fun setNotify(
         target: CharacteristicTargetMessage,
         type: NotifyTypeMessage,
         callback: (Result<Unit>) -> Unit,
-    ) = callback(notImplemented("setNotify", "#23"))
+    ) = BleProcessOwner.setNotify(target, type, callback)
 
     override fun readDescriptor(
         target: DescriptorTargetMessage,
         callback: (Result<ByteArray>) -> Unit,
-    ) = callback(notImplemented("readDescriptor", "#23"))
+    ) = BleProcessOwner.readDescriptor(target, callback)
 
     override fun writeDescriptor(
         target: DescriptorTargetMessage,
         value: ByteArray,
         callback: (Result<Unit>) -> Unit,
-    ) = callback(notImplemented("writeDescriptor", "#23"))
+    ) = BleProcessOwner.writeDescriptor(target, value, callback)
 
     override fun requestMtu(
         deviceId: String,
         connectionEpoch: Long,
         mtu: Long,
         callback: (Result<Long>) -> Unit,
-    ) = callback(notImplemented("requestMtu", "#23"))
+    ) = BleProcessOwner.requestMtu(deviceId, connectionEpoch, mtu, callback)
 
     override fun readRssi(
         deviceId: String,
         connectionEpoch: Long,
         callback: (Result<Long>) -> Unit,
-    ) = callback(notImplemented("readRssi", "#23"))
+    ) = BleProcessOwner.readRssi(deviceId, connectionEpoch, callback)
 
     override fun associate(filter: ScanFilterMessage?, callback: (Result<String>) -> Unit) =
         callback(notImplemented("associate", "#26"))

@@ -52,6 +52,55 @@ internal class HandleRegistryTest {
     }
 
     @Test
+    fun handleOf_returnsHandleForRegisteredInstance() {
+        // notify/indicate は callback で来た characteristic instance から handle を逆引きして
+        // 通知ストリームへ送る(Review guide §9: UUID ではなく handle で相関)。
+        val registry = HandleRegistry<Any>()
+        val first = Any()
+        val second = Any()
+
+        val firstHandle = registry.register(first)
+        val secondHandle = registry.register(second)
+
+        assertEquals(firstHandle, registry.handleOf(first))
+        assertEquals(secondHandle, registry.handleOf(second))
+    }
+
+    @Test
+    fun handleOf_usesIdentityNotEqualityForDuplicateUuids() {
+        // 同じ UUID(equals が等しい)別 instance でも、それぞれの handle を identity で返す。
+        val registry = HandleRegistry<String>()
+        val first = String(charArrayOf('a'))
+        val second = String(charArrayOf('a'))
+
+        val firstHandle = registry.register(first)
+        val secondHandle = registry.register(second)
+
+        assertNotEquals(firstHandle, secondHandle)
+        assertEquals(firstHandle, registry.handleOf(first))
+        assertEquals(secondHandle, registry.handleOf(second))
+    }
+
+    @Test
+    fun handleOf_returnsNullForUnknownInstance() {
+        val registry = HandleRegistry<Any>()
+        registry.register(Any())
+
+        assertNull(registry.handleOf(Any()))
+    }
+
+    @Test
+    fun clear_dropsReverseLookupToo() {
+        val registry = HandleRegistry<Any>()
+        val obj = Any()
+        registry.register(obj)
+
+        registry.clear()
+
+        assertNull(registry.handleOf(obj))
+    }
+
+    @Test
     fun contains_reflectsRegistration() {
         val registry = HandleRegistry<String>()
         val handle = registry.register("a")

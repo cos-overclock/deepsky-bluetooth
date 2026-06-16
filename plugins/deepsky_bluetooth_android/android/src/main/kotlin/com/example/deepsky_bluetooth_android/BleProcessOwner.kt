@@ -195,6 +195,96 @@ object BleProcessOwner {
         c.discoverServices(callback)
     }
 
+    // --- GATT operations -------------------------------------------------
+
+    fun readCharacteristic(
+        target: CharacteristicTargetMessage,
+        strictRead: Boolean,
+        callback: (Result<ByteArray>) -> Unit,
+    ) {
+        val c = connectionFor(target.deviceId, target.connectionEpoch) {
+            callback(Result.failure(bleError(BleErrorCode.NOT_CONNECTED, "Not connected")))
+        } ?: return
+        c.readCharacteristic(target.characteristicHandle, strictRead, callback)
+    }
+
+    fun writeCharacteristic(
+        target: CharacteristicTargetMessage,
+        value: ByteArray,
+        withResponse: Boolean,
+        callback: (Result<Unit>) -> Unit,
+    ) {
+        val c = connectionFor(target.deviceId, target.connectionEpoch) {
+            callback(Result.failure(bleError(BleErrorCode.NOT_CONNECTED, "Not connected")))
+        } ?: return
+        c.writeCharacteristic(target.characteristicHandle, value, withResponse, callback)
+    }
+
+    fun setNotify(
+        target: CharacteristicTargetMessage,
+        type: NotifyTypeMessage,
+        callback: (Result<Unit>) -> Unit,
+    ) {
+        val c = connectionFor(target.deviceId, target.connectionEpoch) {
+            callback(Result.failure(bleError(BleErrorCode.NOT_CONNECTED, "Not connected")))
+        } ?: return
+        c.setNotify(target.characteristicHandle, type, callback)
+    }
+
+    fun readDescriptor(
+        target: DescriptorTargetMessage,
+        callback: (Result<ByteArray>) -> Unit,
+    ) {
+        val c = connectionFor(target.deviceId, target.connectionEpoch) {
+            callback(Result.failure(bleError(BleErrorCode.NOT_CONNECTED, "Not connected")))
+        } ?: return
+        c.readDescriptor(target.descriptorHandle, callback)
+    }
+
+    fun writeDescriptor(
+        target: DescriptorTargetMessage,
+        value: ByteArray,
+        callback: (Result<Unit>) -> Unit,
+    ) {
+        val c = connectionFor(target.deviceId, target.connectionEpoch) {
+            callback(Result.failure(bleError(BleErrorCode.NOT_CONNECTED, "Not connected")))
+        } ?: return
+        c.writeDescriptor(target.descriptorHandle, value, callback)
+    }
+
+    fun requestMtu(
+        deviceId: String,
+        connectionEpoch: Long,
+        mtu: Long,
+        callback: (Result<Long>) -> Unit,
+    ) {
+        val c = connectionFor(deviceId, connectionEpoch) {
+            callback(Result.failure(bleError(BleErrorCode.NOT_CONNECTED, "Not connected")))
+        } ?: return
+        c.requestMtu(mtu, callback)
+    }
+
+    fun readRssi(deviceId: String, connectionEpoch: Long, callback: (Result<Long>) -> Unit) {
+        val c = connectionFor(deviceId, connectionEpoch) {
+            callback(Result.failure(bleError(BleErrorCode.NOT_CONNECTED, "Not connected")))
+        } ?: return
+        c.readRssi(callback)
+    }
+
+    /** 現在 epoch の接続を返す。接続が無い・epoch が古ければ [onMissing] を呼び null を返す。 */
+    private inline fun connectionFor(
+        deviceId: String,
+        connectionEpoch: Long,
+        onMissing: () -> Unit,
+    ): GattConnection? {
+        val c = connections[deviceId]
+        if (c == null || c.connectionEpoch != connectionEpoch) {
+            onMissing()
+            return null
+        }
+        return c
+    }
+
     // --- connection callback guard --------------------------------------
 
     /**
@@ -209,6 +299,26 @@ object BleProcessOwner {
     ) {
         if (!epochs.isCurrent(deviceId, epoch)) return
         sink?.onConnectionStateChanged(deviceId, epoch, state, reason) {}
+    }
+
+    /**
+     * notify/indicate の値を epoch guard 越しに通知ストリームへ転送する。古い世代の characteristic
+     * からの遅延通知はここで破棄する(Review guide §9 / §10)。
+     */
+    internal fun emitCharacteristicValue(
+        deviceId: String,
+        epoch: Long,
+        characteristicHandle: Long,
+        value: ByteArray,
+    ) {
+        if (!epochs.isCurrent(deviceId, epoch)) return
+        sink?.onCharacteristicValue(deviceId, epoch, characteristicHandle, value) {}
+    }
+
+    /** 操作 timeout を epoch guard 越しに通知する。退役前に呼ぶこと(Review guide §10)。 */
+    internal fun onOperationTimeout(deviceId: String, epoch: Long) {
+        if (!epochs.isCurrent(deviceId, epoch)) return
+        sink?.onOperationTimeout(deviceId, epoch) {}
     }
 
     /** 接続実体が閉じたときに呼ぶ。現在 epoch なら退役させ map から外す。 */

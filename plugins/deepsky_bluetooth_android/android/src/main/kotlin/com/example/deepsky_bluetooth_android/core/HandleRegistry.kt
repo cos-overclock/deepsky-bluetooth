@@ -6,6 +6,9 @@ package com.example.deepsky_bluetooth_android.core
  *
  * - handle は探索順に単調増加で採番する。同じ UUID の属性が複数あっても別 handle になるため、
  *   UUID ではなく handle で操作・通知を相関できる(Review guide §9)。
+ * - [handleOf] で native object → handle の逆引きも提供する。notify/indicate callback で来た
+ *   characteristic instance から handle を引き、通知ストリームへ相関させるために使う。逆引きは
+ *   identity(参照同一性)で照合し、同じ UUID の別 instance を取り違えない(Review guide §9)。
  * - epoch 退役・再探索時は [clear] で全 mapping を破棄する。counter は戻さないため、古い tree の
  *   handle は再探索後も new object へ付け替わらず解決不能のままになる(Review guide §11)。
  *
@@ -14,6 +17,8 @@ package com.example.deepsky_bluetooth_android.core
  */
 class HandleRegistry<T> {
     private val objects = mutableMapOf<Long, T>()
+    // 逆引きは identity 照合。equals が等しい別 instance(同 UUID の属性)を別 handle として扱う。
+    private val handlesByObject = java.util.IdentityHashMap<T, Long>()
     private var nextHandle = FIRST_HANDLE
 
     /** [value] に探索順の新しい handle を採番して登録し、その handle を返す。 */
@@ -21,12 +26,17 @@ class HandleRegistry<T> {
     fun register(value: T): Long {
         val handle = nextHandle++
         objects[handle] = value
+        handlesByObject[value] = handle
         return handle
     }
 
     /** [handle] に対応する native object。未登録・clear 済みなら null(呼び出し側で NotFound)。 */
     @Synchronized
     fun resolve(handle: Long): T? = objects[handle]
+
+    /** [value] と参照同一な登録済み object の handle。未登録・clear 済みなら null。 */
+    @Synchronized
+    fun handleOf(value: T): Long? = handlesByObject[value]
 
     /** [handle] が現在有効に登録されているか。 */
     @Synchronized
@@ -36,6 +46,7 @@ class HandleRegistry<T> {
     @Synchronized
     fun clear() {
         objects.clear()
+        handlesByObject.clear()
     }
 
     companion object {
