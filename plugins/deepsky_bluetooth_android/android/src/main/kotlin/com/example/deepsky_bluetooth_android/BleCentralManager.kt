@@ -15,8 +15,25 @@ class BleCentralManager(private val context: Context) : BleHostApi {
         return observe("initialize", mapOf("isBackground" to request.isBackground)) {
             BleProcessOwner.attach(context)
             if (request.isBackground) {
-                // background strategy(Foreground Service / Companion Device)は #25-#27。
-                throw bleError(BleErrorCode.FAILED, "Background mode is not implemented yet (#25-#27)")
+                when (request.strategy) {
+                    BackgroundStrategyMessage.FOREGROUND_SERVICE -> {
+                        val notification = request.notification
+                            ?: throw bleError(
+                                BleErrorCode.BACKGROUND_CONFIG_MISSING,
+                                "Foreground service notification config is required",
+                            )
+                        BleProcessOwner.startForegroundService(notification)
+                    }
+                    BackgroundStrategyMessage.COMPANION_DEVICE ->
+                        throw bleError(
+                            BleErrorCode.FAILED,
+                            "Companion Device background mode is not implemented yet (#26-#27)",
+                        )
+                    null -> throw bleError(
+                        BleErrorCode.BACKGROUND_CONFIG_MISSING,
+                        "Android background strategy is required",
+                    )
+                }
             }
             "engine-${System.identityHashCode(this)}"
         }
