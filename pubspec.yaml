@@ -8,6 +8,7 @@ environment:
   flutter: ">=3.44.0"
 
 workspace:
+  - packages/deepsky_bluetooth_util
   - packages/deepsky_bluetooth_interface
   - packages/deepsky_bluetooth_android_bridge
   - packages/deepsky_bluetooth_ios_bridge
@@ -21,6 +22,14 @@ dependencies:
     sdk: flutter
 
   steady: ^1.2.0
+  deepsky_bluetooth_interface:
+    path: packages/deepsky_bluetooth_interface
+  deepsky_bluetooth_android_bridge:
+    path: packages/deepsky_bluetooth_android_bridge
+  deepsky_bluetooth_ios_bridge:
+    path: packages/deepsky_bluetooth_ios_bridge
+  deepsky_bluetooth_macos_bridge:
+    path: packages/deepsky_bluetooth_macos_bridge
 
 dev_dependencies:
   flutter_test:
