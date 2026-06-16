@@ -17,5 +17,15 @@
             android:name="com.example.deepsky_bluetooth_android.DeepskyForegroundService"
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
+
+        <!-- CompanionDeviceService: device の出現/消失通知。system が BIND するため exported。#27 -->
+        <service
+            android:name="com.example.deepsky_bluetooth_android.DeepskyCompanionDeviceService"
+            android:exported="true"
+            android:permission="android.permission.BIND_COMPANION_DEVICE_SERVICE">
+            <intent-filter>
+                <action android:name="android.companion.CompanionDeviceService" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

@@ -16,7 +16,13 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.ParcelUuid
+import com.example.deepsky_bluetooth_android.core.CompanionPresenceEvent
+import com.example.deepsky_bluetooth_android.core.CompanionPresenceNormalizer
+import com.example.deepsky_bluetooth_android.core.DeviceAddressNormalizer
 import com.example.deepsky_bluetooth_android.core.EpochRegistry
+import com.example.deepsky_bluetooth_android.core.PendingPresenceBuffer
+import com.example.deepsky_bluetooth_android.core.ReconnectDriver
+import com.example.deepsky_bluetooth_android.core.ReconnectDriverSelector
 
 /**
  * プロセスグローバルな BLE owner singleton。
@@ -51,6 +57,11 @@ object BleProcessOwner {
     private var activity: Activity? = null
     private var companion: CompanionDeviceController? = null
 
+    // presence event を sink 不在時に保持するバッファと、presence 監視が有効な device 集合。
+    // 前者は headless 復活時の取りこぼし防止、後者は再接続駆動源 A/C の判定に使う(Review guide §8/§12)。
+    private val pendingPresence = PendingPresenceBuffer()
+    private val presenceEnabledDevices = mutableSetOf<String>()
+
     private val adapter: BluetoothAdapter?
         get() = (appContext?.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
 
@@ -58,14 +69,22 @@ object BleProcessOwner {
 
     /** plugin attach 時に呼ぶ。最初の context を保持し adapter 監視を開始する。 */
     fun attach(context: Context) {
-        if (appContext == null) appContext = context.applicationContext
+        ensureContext(context)
         registerAdapterReceiver()
+    }
+
+    /** appContext だけを確保する。receiver 登録などの副作用は持たない（[ensureAttached] と共用）。 */
+    @Synchronized
+    private fun ensureContext(context: Context) {
+        if (appContext == null) appContext = context.applicationContext
     }
 
     /** engine attach 時の sink 登録。active sink は常に1つとする(Review guide §12)。 */
     @Synchronized
     fun registerSink(callbacks: BleCallbacksApi) {
         sink = callbacks
+        // engine 不在中に蓄えた presence event を新 sink へ flush する(Review guide §12)。
+        pendingPresence.drain().forEach { emitPresence(callbacks, it) }
     }
 
     /**
@@ -112,16 +131,110 @@ object BleProcessOwner {
         controller.associate(filter, activity, callback)
     }
 
-    /** presence 監視の開始/停止。世代分岐と associationId 解決は controller が持つ。 */
+    /**
+     * presence 監視の開始/停止。世代分岐と associationId 解決は controller が持つ。controller 呼び出しが
+     * 成功した場合だけ presence 有効集合を更新し、再接続駆動源 A/C の判定([reconnectDriver])へ反映する。
+     */
     fun setDevicePresenceObservation(deviceId: String, enabled: Boolean) {
         val controller = companionController()
             ?: throw BleErrorMapping.bluetoothUnavailable("Owner not attached")
         controller.setDevicePresenceObservation(deviceId, enabled)
+        // ここに到達＝controller が例外を投げずに監視要求を受理した。正準 id で集合を更新する。
+        val id = DeviceAddressNormalizer.normalize(deviceId) ?: return
+        synchronized(presenceEnabledDevices) {
+            if (enabled) presenceEnabledDevices.add(id) else presenceEnabledDevices.remove(id)
+        }
+    }
+
+    /**
+     * 対象 device の再接続駆動源(Review guide §8)。presence 有効なら C、無効でも UI engine 生存中なら
+     * A、headless かつ presence 無効なら NONE(presence 必須だが不在)。後続 Task 17 の状態マシンが使う。
+     */
+    fun reconnectDriver(deviceId: String): ReconnectDriver {
+        val id = DeviceAddressNormalizer.normalize(deviceId) ?: deviceId
+        val enabled = synchronized(presenceEnabledDevices) { presenceEnabledDevices.contains(id) }
+        return ReconnectDriverSelector.select(presenceEnabled = enabled, hasUiEngine = sink != null)
+    }
+
+    // --- CompanionDeviceService presence callback の受け口(#27) ---------
+    //
+    // service(別プロセス起動あり)が世代別 callback から抽出した生プリミティブを渡す。owner は
+    // controller の関連付け一覧で正規化し、sink があれば配送、無ければ buffer する。世代差分は
+    // 純粋な CompanionPresenceNormalizer が吸収し、3 世代が同じ内部 event になる(受け入れ条件)。
+
+    /** 31-32: `onDeviceAppeared(String)`。 */
+    fun onCompanionDeviceAppeared(rawAddress: String?) {
+        deliverPresence(CompanionPresenceNormalizer.fromAddress(rawAddress, appeared = true))
+    }
+
+    /** 31-32: `onDeviceDisappeared(String)`。 */
+    fun onCompanionDeviceDisappeared(rawAddress: String?) {
+        deliverPresence(CompanionPresenceNormalizer.fromAddress(rawAddress, appeared = false))
+    }
+
+    /** 33-35: `onDeviceAppeared/Disappeared(AssociationInfo)`。 */
+    fun onCompanionAssociationEvent(deviceAddress: String?, associationId: Int?, appeared: Boolean) {
+        deliverPresence(
+            CompanionPresenceNormalizer.fromAssociation(
+                deviceAddress = deviceAddress,
+                associationId = associationId,
+                associations = companionController()?.associationEntries() ?: emptyList(),
+                appeared = appeared,
+            ),
+        )
+    }
+
+    /** 36+: `onDevicePresenceEvent(DevicePresenceEvent)`。 */
+    fun onCompanionPresenceEvent(associationId: Int, eventType: Int) {
+        deliverPresence(
+            CompanionPresenceNormalizer.fromPresenceEvent(
+                associationId = associationId,
+                eventType = eventType,
+                associations = companionController()?.associationEntries() ?: emptyList(),
+            ),
+        )
+    }
+
+    /**
+     * 正規化済み event を sink へ配送する。sink 不在なら buffer に保持する(Review guide §12)。
+     *
+     * sink の確認と record/emit は [registerSink] の「sink 設定 → drain」と同じ monitor 上で atomic に
+     * する。さもないと sink==null を観測した直後に registerSink が drain を終え、その後 record した event
+     * が次の registerSink まで滞留する race が起きる。
+     */
+    @Synchronized
+    private fun deliverPresence(event: CompanionPresenceEvent?) {
+        if (event == null) return
+        val s = sink
+        if (s != null) {
+            emitPresence(s, event)
+        } else {
+            pendingPresence.record(event)
+        }
+    }
+
+    private fun emitPresence(s: BleCallbacksApi, event: CompanionPresenceEvent) {
+        if (event.appeared) {
+            BleNativeObservers.emitCallback("onDeviceAppeared", mapOf("deviceId" to event.deviceId))
+            s.onDeviceAppeared(event.deviceId) {}
+        } else {
+            BleNativeObservers.emitCallback("onDeviceDisappeared", mapOf("deviceId" to event.deviceId))
+            s.onDeviceDisappeared(event.deviceId) {}
+        }
     }
 
     /** ActivityResultListener から転送する associate チューザ結果。処理したら true。 */
     fun handleCompanionActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean =
         companion?.handleActivityResult(requestCode, resultCode, data) ?: false
+
+    /**
+     * service など engine 外の経路から呼ばれても controller を組めるよう appContext だけを確保する。
+     * process 復活直後は plugin attach 前で appContext が無いことがあるため。adapter receiver 登録は
+     * plugin の [attach] に任せ、service スレッドからの二重登録を避ける。
+     */
+    fun ensureAttached(context: Context) {
+        ensureContext(context)
+    }
 
     private fun companionController(): CompanionDeviceController? {
         val ctx = appContext ?: return null
@@ -432,6 +545,9 @@ object BleProcessOwner {
         sink = null
         activity = null
         companion = null
+        // presence の保留 event と有効集合も明示破棄で手放す(dispose 後に古い presence が残らない)。
+        pendingPresence.drain()
+        synchronized(presenceEnabledDevices) { presenceEnabledDevices.clear() }
         appContext?.let { DeepskyForegroundService.stop(it) }
     }
 
