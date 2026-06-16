@@ -6,14 +6,10 @@ import kotlin.test.assertEquals
 
 internal class BleErrorMappingTest {
     @Test
-    fun invalidDeviceIdAndOutOfRangeConnectionMapToDifferentReasons() {
+    fun invalidDeviceIdAndConnectionFailureUseDifferentErrorChannels() {
         val invalidIdError = BleErrorMapping.invalidDeviceId("not-a-mac-address")
 
         assertEquals(BleErrorCode.NOT_FOUND, invalidIdError.code)
-        assertEquals(
-            DisconnectReasonMessage.DEVICE_NOT_FOUND,
-            BleErrorMapping.disconnectReasonForInvalidDeviceId(),
-        )
         assertEquals(
             DisconnectReasonMessage.CONNECT_FAILED,
             BleErrorMapping.disconnectReasonForConnectionClosed(

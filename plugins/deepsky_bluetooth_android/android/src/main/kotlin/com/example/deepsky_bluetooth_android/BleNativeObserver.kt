@@ -2,6 +2,7 @@ package com.example.deepsky_bluetooth_android
 
 import android.util.Log
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** Android native layer lifecycle/callback observer. */
 internal interface BleNativeObserver {
@@ -21,15 +22,18 @@ internal object LogcatBleNativeObserver : BleNativeObserver {
     private const val TAG = "DeepskyBluetooth"
 
     override fun onMethodStart(method: String, payload: Map<String, Any?>) {
+        if (!Log.isLoggable(TAG, Log.DEBUG)) return
         Log.d(TAG, "method start: $method ${payload.toLogSuffix()}")
     }
 
     override fun onMethodEnd(method: String, payload: Map<String, Any?>, errorCode: String?) {
+        if (!Log.isLoggable(TAG, Log.DEBUG)) return
         val status = errorCode ?: "ok"
         Log.d(TAG, "method end: $method status=$status ${payload.toLogSuffix()}")
     }
 
     override fun onCallback(callback: String, payload: Map<String, Any?>) {
+        if (!Log.isLoggable(TAG, Log.DEBUG)) return
         Log.d(TAG, "callback: $callback ${payload.toLogSuffix()}")
     }
 
@@ -44,7 +48,7 @@ internal object BleNativeObservers {
     private val observers = CopyOnWriteArrayList<BleNativeObserver>()
 
     init {
-        register(LogcatBleNativeObserver)
+        resetToDefaults()
     }
 
     fun register(observer: BleNativeObserver) {
@@ -56,7 +60,7 @@ internal object BleNativeObservers {
     }
 
     fun clear() {
-        observers.clear()
+        resetToDefaults()
     }
 
     fun <T> observeMethod(
@@ -71,6 +75,30 @@ internal object BleNativeObservers {
             result
         } catch (error: Throwable) {
             emitMethodEnd(method, payload, error.pigeonCodeOrNull())
+            throw error
+        }
+    }
+
+    fun <T> observeCallbackMethod(
+        method: String,
+        payload: Map<String, Any?> = emptyMap(),
+        callback: (Result<T>) -> Unit,
+        block: ((Result<T>) -> Unit) -> Unit,
+    ) {
+        emitMethodStart(method, payload)
+        val completed = AtomicBoolean(false)
+        val observedCallback: (Result<T>) -> Unit = { result ->
+            if (completed.compareAndSet(false, true)) {
+                emitMethodEnd(method, payload, result.exceptionOrNull()?.pigeonCodeOrNull())
+            }
+            callback(result)
+        }
+        try {
+            block(observedCallback)
+        } catch (error: Throwable) {
+            if (completed.compareAndSet(false, true)) {
+                emitMethodEnd(method, payload, error.pigeonCodeOrNull())
+            }
             throw error
         }
     }
@@ -102,6 +130,11 @@ internal object BleNativeObservers {
             }
         }
     }
+
+    private fun resetToDefaults() {
+        observers.clear()
+        observers.add(LogcatBleNativeObserver)
+    }
 }
 
-private fun Throwable.pigeonCodeOrNull(): String? = (this as? FlutterError)?.code
+internal fun Throwable.pigeonCodeOrNull(): String? = (this as? FlutterError)?.code

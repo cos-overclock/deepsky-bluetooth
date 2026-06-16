@@ -79,6 +79,38 @@ internal class BleNativeObserversTest {
         )
     }
 
+    @Test
+    fun clearRestoresDefaultLogcatObserver() {
+        BleNativeObservers.register(recordingObserver("observer"))
+
+        BleNativeObservers.clear()
+
+        assertEquals(listOf(LogcatBleNativeObserver), registeredObservers())
+    }
+
+    @Test
+    fun observeCallbackMethodEmitsEndWhenCallbackFails() {
+        BleNativeObservers.register(recordingObserver("observer"))
+        var received: Result<Unit>? = null
+
+        BleNativeObservers.observeCallbackMethod(
+            method = "associate",
+            payload = emptyMap(),
+            callback = { received = it },
+        ) { callback ->
+            callback(Result.failure(bleError(BleErrorCode.FAILED, "not implemented")))
+        }
+
+        assertEquals(BleErrorCode.FAILED, received?.exceptionOrNull()?.pigeonCodeOrNull())
+        assertEquals(
+            listOf(
+                "observer:start:associate",
+                "observer:end:associate:failed",
+            ),
+            events,
+        )
+    }
+
     private fun recordingObserver(prefix: String) = object : BleNativeObserver {
         override fun onMethodStart(method: String, payload: Map<String, Any?>) {
             events.add("$prefix:start:$method")
@@ -91,5 +123,12 @@ internal class BleNativeObserversTest {
         override fun onCallback(callback: String, payload: Map<String, Any?>) {
             events.add("$prefix:callback:$callback")
         }
+    }
+
+    private fun registeredObservers(): List<BleNativeObserver> {
+        val field = BleNativeObservers::class.java.getDeclaredField("observers")
+        field.isAccessible = true
+        @Suppress("UNCHECKED_CAST")
+        return (field.get(BleNativeObservers) as Iterable<BleNativeObserver>).toList()
     }
 }

@@ -44,38 +44,40 @@ class BleCentralManager(private val context: Context) : BleHostApi {
     override fun stopScan() = observe("stopScan") { BleProcessOwner.stopScan() }
 
     override fun connect(deviceId: String, callback: (Result<ConnectionAttemptMessage>) -> Unit) =
-        observe("connect", mapOf("deviceId" to deviceId)) {
-            BleProcessOwner.connect(deviceId, callback)
+        observeAsync("connect", mapOf("deviceId" to deviceId), callback) {
+            BleProcessOwner.connect(deviceId, it)
         }
 
     override fun disconnect(
         deviceId: String,
         connectionEpoch: Long,
         callback: (Result<Unit>) -> Unit,
-    ) = observe(
+    ) = observeAsync(
         "disconnect",
         mapOf("deviceId" to deviceId, "connectionEpoch" to connectionEpoch),
+        callback,
     ) {
-        BleProcessOwner.disconnect(deviceId, connectionEpoch, callback)
+        BleProcessOwner.disconnect(deviceId, connectionEpoch, it)
     }
 
     override fun discoverServices(
         deviceId: String,
         connectionEpoch: Long,
         callback: (Result<List<ServiceMessage>>) -> Unit,
-    ) = observe(
+    ) = observeAsync(
         "discoverServices",
         mapOf("deviceId" to deviceId, "connectionEpoch" to connectionEpoch),
+        callback,
     ) {
-        BleProcessOwner.discoverServices(deviceId, connectionEpoch, callback)
+        BleProcessOwner.discoverServices(deviceId, connectionEpoch, it)
     }
 
     override fun readCharacteristic(
         target: CharacteristicTargetMessage,
         strictRead: Boolean,
         callback: (Result<ByteArray>) -> Unit,
-    ) = observe("readCharacteristic", targetPayload(target)) {
-        BleProcessOwner.readCharacteristic(target, strictRead, callback)
+    ) = observeAsync("readCharacteristic", targetPayload(target), callback) {
+        BleProcessOwner.readCharacteristic(target, strictRead, it)
     }
 
     override fun writeCharacteristic(
@@ -83,31 +85,31 @@ class BleCentralManager(private val context: Context) : BleHostApi {
         value: ByteArray,
         withResponse: Boolean,
         callback: (Result<Unit>) -> Unit,
-    ) = observe("writeCharacteristic", targetPayload(target)) {
-        BleProcessOwner.writeCharacteristic(target, value, withResponse, callback)
+    ) = observeAsync("writeCharacteristic", targetPayload(target), callback) {
+        BleProcessOwner.writeCharacteristic(target, value, withResponse, it)
     }
 
     override fun setNotify(
         target: CharacteristicTargetMessage,
         type: NotifyTypeMessage,
         callback: (Result<Unit>) -> Unit,
-    ) = observe("setNotify", targetPayload(target) + ("type" to type)) {
-        BleProcessOwner.setNotify(target, type, callback)
+    ) = observeAsync("setNotify", targetPayload(target) + ("type" to type), callback) {
+        BleProcessOwner.setNotify(target, type, it)
     }
 
     override fun readDescriptor(
         target: DescriptorTargetMessage,
         callback: (Result<ByteArray>) -> Unit,
-    ) = observe("readDescriptor", targetPayload(target)) {
-        BleProcessOwner.readDescriptor(target, callback)
+    ) = observeAsync("readDescriptor", targetPayload(target), callback) {
+        BleProcessOwner.readDescriptor(target, it)
     }
 
     override fun writeDescriptor(
         target: DescriptorTargetMessage,
         value: ByteArray,
         callback: (Result<Unit>) -> Unit,
-    ) = observe("writeDescriptor", targetPayload(target)) {
-        BleProcessOwner.writeDescriptor(target, value, callback)
+    ) = observeAsync("writeDescriptor", targetPayload(target), callback) {
+        BleProcessOwner.writeDescriptor(target, value, it)
     }
 
     override fun requestMtu(
@@ -115,26 +117,30 @@ class BleCentralManager(private val context: Context) : BleHostApi {
         connectionEpoch: Long,
         mtu: Long,
         callback: (Result<Long>) -> Unit,
-    ) = observe(
+    ) = observeAsync(
         "requestMtu",
         mapOf("deviceId" to deviceId, "connectionEpoch" to connectionEpoch, "mtu" to mtu),
+        callback,
     ) {
-        BleProcessOwner.requestMtu(deviceId, connectionEpoch, mtu, callback)
+        BleProcessOwner.requestMtu(deviceId, connectionEpoch, mtu, it)
     }
 
     override fun readRssi(
         deviceId: String,
         connectionEpoch: Long,
         callback: (Result<Long>) -> Unit,
-    ) = observe(
+    ) = observeAsync(
         "readRssi",
         mapOf("deviceId" to deviceId, "connectionEpoch" to connectionEpoch),
+        callback,
     ) {
-        BleProcessOwner.readRssi(deviceId, connectionEpoch, callback)
+        BleProcessOwner.readRssi(deviceId, connectionEpoch, it)
     }
 
     override fun associate(filter: ScanFilterMessage?, callback: (Result<String>) -> Unit) =
-        observe("associate") { callback(notImplemented("associate", "#26")) }
+        observeAsync("associate", callback = callback) {
+            it(notImplemented("associate", "#26"))
+        }
 
     override fun setDevicePresenceObservation(deviceId: String, enabled: Boolean) {
         observe(
@@ -156,6 +162,15 @@ class BleCentralManager(private val context: Context) : BleHostApi {
         payload: Map<String, Any?> = emptyMap(),
         block: () -> T,
     ): T = BleNativeObservers.observeMethod(method, payload, block)
+
+    private fun <T> observeAsync(
+        method: String,
+        payload: Map<String, Any?> = emptyMap(),
+        callback: (Result<T>) -> Unit,
+        block: ((Result<T>) -> Unit) -> Unit,
+    ) {
+        BleNativeObservers.observeCallbackMethod(method, payload, callback, block)
+    }
 
     private fun targetPayload(target: CharacteristicTargetMessage): Map<String, Any?> = mapOf(
         "deviceId" to target.deviceId,

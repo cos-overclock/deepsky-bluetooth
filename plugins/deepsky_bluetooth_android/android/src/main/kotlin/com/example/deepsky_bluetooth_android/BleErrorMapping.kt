@@ -19,9 +19,6 @@ internal object BleErrorMapping {
     fun notConnected(): FlutterError =
         bleError(BleErrorCode.NOT_CONNECTED, "Not connected")
 
-    fun disconnectReasonForInvalidDeviceId(): DisconnectReasonMessage =
-        DisconnectReasonMessage.DEVICE_NOT_FOUND
-
     fun disconnectReasonForConnectionClosed(
         wasConnecting: Boolean,
         pendingReason: DisconnectReasonMessage?,
