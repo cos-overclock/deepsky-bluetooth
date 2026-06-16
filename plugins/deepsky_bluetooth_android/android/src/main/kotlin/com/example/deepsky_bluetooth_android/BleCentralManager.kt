@@ -8,13 +8,20 @@ import android.content.Context
  * scan / connect / disconnect / service discovery / GATT operations(read / write / notify /
  * descriptor / MTU / RSSI)、associate / presence 監視を [BleProcessOwner] へ委譲する。
  * Companion Device の世代差分は controller 内へ閉じ込められ、ここからは見えない(#26)。
- * Companion Device background mode の init / presence event 配送は後続 issue(#27/#29)。
+ * background callback handle の永続化と `COMPANION_DEVICE` strategy の受理は #28 で扱う
+ * (handle は [HeadlessEngineLauncher] が保存し、process 死後の headless 復活に使う)。
  */
 class BleCentralManager(private val context: Context) : BleHostApi {
 
     override fun initialize(request: InitializeRequestMessage): String {
         return observe("initialize", mapOf("isBackground" to request.isBackground)) {
             BleProcessOwner.attach(context)
+            // Persist the dedicated background entry-point handle so the headless engine can be
+            // revived after process death (#28). Registration originates from Dart's
+            // background(onBackgroundRelaunch:) (Task 17) and arrives via this request.
+            request.backgroundCallbackHandle?.let {
+                HeadlessEngineLauncher.storeBackgroundHandle(context, it)
+            }
             if (request.isBackground) {
                 when (request.strategy) {
                     BackgroundStrategyMessage.FOREGROUND_SERVICE -> {
@@ -25,11 +32,11 @@ class BleCentralManager(private val context: Context) : BleHostApi {
                             )
                         BleProcessOwner.startForegroundService(notification)
                     }
-                    BackgroundStrategyMessage.COMPANION_DEVICE ->
-                        throw bleError(
-                            BleErrorCode.FAILED,
-                            "Companion Device background mode is not implemented yet (#27)",
-                        )
+                    // Companion Device drives reconnection via presence events delivered to the
+                    // CompanionDeviceService (#27); the headless engine is revived there (#28).
+                    // Presence observation is enabled per device via associate, not at init
+                    // (Review guide §8), so initialize only attaches the owner here.
+                    BackgroundStrategyMessage.COMPANION_DEVICE -> Unit
                     null -> throw bleError(
                         BleErrorCode.BACKGROUND_CONFIG_MISSING,
                         "Android background strategy is required",
