@@ -77,6 +77,14 @@ object BleProcessOwner {
         sink?.onAdapterStateChanged(state) {}
     }
 
+    // --- foreground service ---------------------------------------------
+
+    fun startForegroundService(notification: NotificationConfigMessage) {
+        val ctx = appContext
+            ?: throw BleErrorMapping.bluetoothUnavailable("Owner not attached")
+        DeepskyForegroundService.start(ctx, notification)
+    }
+
     // --- scan ------------------------------------------------------------
 
     /** ネイティブ `ScanFilter`(1 エントリ=1 ScanFilter、リスト全体で OR)で scan を開始する。 */
@@ -379,6 +387,7 @@ object BleProcessOwner {
             adapterReceiverRegistered = false
         }
         sink = null
+        appContext?.let { DeepskyForegroundService.stop(it) }
     }
 
     // --- internals -------------------------------------------------------
