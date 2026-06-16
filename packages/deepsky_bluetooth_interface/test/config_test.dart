@@ -40,6 +40,12 @@ void main() {
           backgroundCallbackHandle: 42,
         ),
       );
+      expect(
+        (background as BackgroundConfig)
+            .copyWith(backgroundCallbackHandle: 84)
+            .backgroundCallbackHandle,
+        84,
+      );
     },
   );
 
