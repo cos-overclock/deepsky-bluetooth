@@ -8,21 +8,37 @@ import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothGattService
 import android.bluetooth.BluetoothProfile
+import android.bluetooth.BluetoothStatusCodes
 import android.content.Context
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import com.example.deepsky_bluetooth_android.core.CallbackKind
 import com.example.deepsky_bluetooth_android.core.HandleRegistry
+import com.example.deepsky_bluetooth_android.core.OperationKind
+import com.example.deepsky_bluetooth_android.core.OperationQueueState
+import java.util.UUID
 
 /**
  * 1 device = 1 `BluetoothGatt` の接続実体。
  *
- * #20 で `connectGatt(autoConnect = false)` / `disconnect` と接続状態 callback を扱い、
- * #21 で service discovery と探索時の handle 採番を追加した。GATT 操作 FIFO queue・
- * read/write/notify は後続 issue(#23)で本クラスを拡張して実装する。
+ * #20 で `connectGatt(autoConnect = false)` / `disconnect` と接続状態 callback を、
+ * #21 で service discovery と探索時の handle 採番を、#23 で GATT 操作の FIFO 直列化
+ * (read/write/notify・descriptor・MTU・RSSI)を追加した。
  *
  * 接続状態は常に [owner] 経由で通知し、owner が epoch guard で古い世代の callback を
  * 破棄する(Review guide §9)。探索した属性は接続(=epoch)寿命の [handles] に探索順で登録し、
- * UUID ではなく handle で逆引きできるようにする(Review guide §9 / §11)。
+ * UUID ではなく handle で逆引きする(Review guide §9 / §11)。
+ *
+ * GATT 操作は device(=この接続)単位の [queue] で同時1件に直列化する(Review guide §10)。
+ * 要求は [queue] 末尾へ enqueue し、先頭1件だけを実行する。GATT callback は現行 epoch と
+ * 先頭操作の種別が一致した場合だけ先頭を完了させ、次をディスパッチする。各操作には watchdog
+ * timer を張り、満了したら接続全体を破棄して epoch を退役させる(同じ GATT でキューを続行しない)。
+ * notify/indicate(`onCharacteristicChanged`)は要求応答ではないためキューに載せず、handle を
+ * 逆引きして通知ストリームへ直送する。
+ *
+ * Pigeon 生成の callback / `BluetoothGatt` callback はいずれも main looper に直列化され、
+ * [queue]([OperationQueueState])は単一スレッド前提で扱う。
  */
 @SuppressLint("MissingPermission")
 class GattConnection(
@@ -38,9 +54,12 @@ class GattConnection(
     private var disconnectCallback: ((Result<Unit>) -> Unit)? = null
     private var pendingDisconnectReason: DisconnectReasonMessage? = null
 
-    // 探索した属性の handle → native object 逆引き。接続(=epoch)寿命で、close 時に clear する。
+    // 探索した属性の handle <-> native object。接続(=epoch)寿命で、退役時に clear する。
     private val handles = HandleRegistry<Any>()
-    private var discoverCallback: ((Result<List<ServiceMessage>>) -> Unit)? = null
+
+    // device 単位の GATT 操作 FIFO queue。payload に completer/native action を載せた [GattOp]。
+    private val queue = OperationQueueState<GattOp<*>>(connectionEpoch)
+    private val watchdog = Runnable { handleOperationTimeout() }
 
     var isConnected = false
         private set
@@ -82,70 +101,143 @@ class GattConnection(
         g.disconnect()
     }
 
+    // --- queued GATT operations -----------------------------------------
+
     /**
      * service/characteristic/descriptor を探索し、探索順に handle を採番した DTO tree を返す。
      *
-     * 同じ UUID の属性も別 handle で区別する。再探索を開始した時点で [handles] を clear するため、
-     * 探索中・探索失敗のいずれでも古い tree の handle は new object へ付け替わらず NotFound のまま
-     * になる(Review guide §11)。
+     * discovery も FIFO queue を通す(Review guide §10)。探索開始時に [handles] を clear し、
+     * counter は戻さないため、進行中・失敗いずれでも古い tree の handle は new object へ付け替わらず
+     * NotFound のままになる(Review guide §11)。
      */
     fun discoverServices(callback: (Result<List<ServiceMessage>>) -> Unit) {
-        val g = gatt
-        if (g == null || !isConnected) {
+        if (!isConnected) {
             callback(Result.failure(bleError(BleErrorCode.NOT_CONNECTED, "Not connected")))
             return
         }
-        if (discoverCallback != null) {
-            callback(Result.failure(
-                bleError(BleErrorCode.REJECTED, "Service discovery already in progress")))
-            return
-        }
-        // discoverServices() は BLUETOOTH_CONNECT が実行時に剥奪されると SecurityException 等を
-        // 投げ得るため、クラッシュさせず FAILED として返す(connect() の connectGatt と同様)。
-        val started = try {
-            g.discoverServices()
-        } catch (e: Exception) {
-            callback(Result.failure(
-                bleError(BleErrorCode.FAILED, "Failed to start service discovery: ${e.message}")))
-            return
-        }
-        if (!started) {
-            callback(Result.failure(
-                bleError(BleErrorCode.FAILED, "Failed to start service discovery")))
-            return
-        }
-        // 再探索を開始した時点で旧 tree の handle を無効化する。counter は戻さないため、進行中も
-        // 失敗時も古い handle は解決できない(Review guide §11)。
-        handles.clear()
-        discoverCallback = callback
+        enqueueAndDispatch(OperationKind.DISCOVER_SERVICES, GattOp(callback) { g ->
+            // 再探索を開始した時点で旧 tree の handle を無効化する。
+            handles.clear()
+            // discoverServices() は BLUETOOTH_CONNECT が実行時に剥奪されると例外を投げ得るため、
+            // クラッシュさせず Rejected で返す。
+            val started = try {
+                g.discoverServices()
+            } catch (e: Exception) {
+                return@GattOp StartOutcome.Rejected(
+                    bleError(BleErrorCode.FAILED, "Failed to start service discovery: ${e.message}"))
+            }
+            if (started) StartOutcome.Issued
+            else StartOutcome.Rejected(
+                bleError(BleErrorCode.FAILED, "Failed to start service discovery"))
+        })
     }
 
-    /** [characteristicHandle] に対応する characteristic。未探索・clear 済みなら NotFound。 */
-    internal fun characteristicFor(characteristicHandle: Long): BluetoothGattCharacteristic {
-        if (!isConnected) throw bleError(BleErrorCode.NOT_CONNECTED, "Not connected")
-        return handles.resolve(characteristicHandle) as? BluetoothGattCharacteristic
-            ?: throw bleError(BleErrorCode.NOT_FOUND, "Unknown characteristic handle")
+    fun readCharacteristic(
+        characteristicHandle: Long,
+        @Suppress("UNUSED_PARAMETER") strictRead: Boolean,
+        callback: (Result<ByteArray>) -> Unit,
+    ) {
+        // Android は read と notify の callback が別なので strictRead は無効(Review guide §10)。
+        val c = resolveCharacteristic(characteristicHandle) { callback(Result.failure(it)); return }
+        enqueueAndDispatch(OperationKind.READ_CHARACTERISTIC, GattOp(callback) { g ->
+            if (g.readCharacteristic(c)) StartOutcome.Issued
+            else StartOutcome.Rejected(bleError(BleErrorCode.REJECTED, "Characteristic read rejected"))
+        })
     }
 
-    /** [descriptorHandle] に対応する descriptor。未探索・clear 済みなら NotFound。 */
-    internal fun descriptorFor(descriptorHandle: Long): BluetoothGattDescriptor {
-        if (!isConnected) throw bleError(BleErrorCode.NOT_CONNECTED, "Not connected")
-        return handles.resolve(descriptorHandle) as? BluetoothGattDescriptor
-            ?: throw bleError(BleErrorCode.NOT_FOUND, "Unknown descriptor handle")
+    fun writeCharacteristic(
+        characteristicHandle: Long,
+        value: ByteArray,
+        withResponse: Boolean,
+        callback: (Result<Unit>) -> Unit,
+    ) {
+        val c = resolveCharacteristic(characteristicHandle) { callback(Result.failure(it)); return }
+        enqueueAndDispatch(OperationKind.WRITE_CHARACTERISTIC, GattOp(callback) { g ->
+            startCharacteristicWrite(g, c, value, withResponse)
+        })
     }
 
-    /** GATT を閉じる。callback は発火させない(退役は owner が epoch guard で扱う)。 */
+    fun setNotify(
+        characteristicHandle: Long,
+        type: NotifyTypeMessage,
+        callback: (Result<Unit>) -> Unit,
+    ) {
+        val c = resolveCharacteristic(characteristicHandle) { callback(Result.failure(it)); return }
+        val cccd = c.getDescriptor(CCCD_UUID)
+        if (cccd == null) {
+            callback(Result.failure(
+                bleError(BleErrorCode.NOT_SUPPORTED, "Characteristic has no CCCD descriptor")))
+            return
+        }
+        // setNotify は「local 通知有効化 + CCCD descriptor write」を1操作としてキューを通す。
+        enqueueAndDispatch(OperationKind.SET_NOTIFY, GattOp(callback) { g ->
+            val enable = type != NotifyTypeMessage.DISABLE
+            if (!g.setCharacteristicNotification(c, enable)) {
+                return@GattOp StartOutcome.Rejected(
+                    bleError(BleErrorCode.FAILED, "Failed to toggle characteristic notification"))
+            }
+            val cccdValue = when (type) {
+                NotifyTypeMessage.NOTIFY -> BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                NotifyTypeMessage.INDICATE -> BluetoothGattDescriptor.ENABLE_INDICATION_VALUE
+                NotifyTypeMessage.DISABLE -> BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE
+            }
+            startDescriptorWrite(g, cccd, cccdValue)
+        })
+    }
+
+    fun readDescriptor(
+        descriptorHandle: Long,
+        callback: (Result<ByteArray>) -> Unit,
+    ) {
+        val d = resolveDescriptor(descriptorHandle) { callback(Result.failure(it)); return }
+        enqueueAndDispatch(OperationKind.READ_DESCRIPTOR, GattOp(callback) { g ->
+            if (g.readDescriptor(d)) StartOutcome.Issued
+            else StartOutcome.Rejected(bleError(BleErrorCode.REJECTED, "Descriptor read rejected"))
+        })
+    }
+
+    fun writeDescriptor(
+        descriptorHandle: Long,
+        value: ByteArray,
+        callback: (Result<Unit>) -> Unit,
+    ) {
+        val d = resolveDescriptor(descriptorHandle) { callback(Result.failure(it)); return }
+        enqueueAndDispatch(OperationKind.WRITE_DESCRIPTOR, GattOp(callback) { g ->
+            startDescriptorWrite(g, d, value)
+        })
+    }
+
+    fun requestMtu(mtu: Long, callback: (Result<Long>) -> Unit) {
+        if (!isConnected) {
+            callback(Result.failure(bleError(BleErrorCode.NOT_CONNECTED, "Not connected")))
+            return
+        }
+        enqueueAndDispatch(OperationKind.REQUEST_MTU, GattOp(callback) { g ->
+            if (g.requestMtu(mtu.toInt())) StartOutcome.Issued
+            else StartOutcome.Rejected(bleError(BleErrorCode.FAILED, "Failed to request MTU"))
+        })
+    }
+
+    fun readRssi(callback: (Result<Long>) -> Unit) {
+        if (!isConnected) {
+            callback(Result.failure(bleError(BleErrorCode.NOT_CONNECTED, "Not connected")))
+            return
+        }
+        enqueueAndDispatch(OperationKind.READ_RSSI, GattOp(callback) { g ->
+            if (g.readRemoteRssi()) StartOutcome.Issued
+            else StartOutcome.Rejected(bleError(BleErrorCode.FAILED, "Failed to read RSSI"))
+        })
+    }
+
+    /** GATT を閉じる。callback は発火させず、未完了操作だけ NotConnected で完了する。 */
     fun close() {
-        gatt?.close()
-        gatt = null
-        isConnected = false
-        // epoch 退役で handle registry を clear し、古い handle を二度と解決させない(Review guide §11)。
-        handles.clear()
-        // 探索中に切断した場合は宙ぶらりんにせず NotConnected で完了させる。
-        discoverCallback?.invoke(
-            Result.failure(bleError(BleErrorCode.NOT_CONNECTED, "Not connected")))
-        discoverCallback = null
+        failQueue(bleError(BleErrorCode.NOT_CONNECTED, "Not connected"))
+        releaseGatt()
+        // 探索中の callback は queue 退役で NotConnected 完了済み。
+        disconnectCallback = null
     }
+
+    // --- callbacks ------------------------------------------------------
 
     override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
         main.post {
@@ -179,20 +271,298 @@ class GattConnection(
 
     override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
         main.post {
-            val callback = discoverCallback ?: return@post
-            discoverCallback = null
-            if (status != BluetoothGatt.GATT_SUCCESS) {
-                // 探索開始時に clear 済みのため、失敗時は handle が空のまま = 全 handle NotFound。
-                callback(Result.failure(
-                    bleError(BleErrorCode.FAILED, "Service discovery failed (status=$status)")))
-                return@post
+            completeInFlight<List<ServiceMessage>>(CallbackKind.SERVICES_DISCOVERED) { op ->
+                if (status != BluetoothGatt.GATT_SUCCESS) {
+                    // 探索開始時に clear 済みのため、失敗時は handle が空のまま = 全 handle NotFound。
+                    op.fail(bleError(
+                        BleErrorCode.FAILED, "Service discovery failed (status=$status)"))
+                    return@completeInFlight
+                }
+                // handle は discovery 開始時に clear 済み。ここで探索順に採番し直す。
+                op.succeed(g.services.map { it.toMessage() })
             }
-            // handle は discoverServices() 開始時に clear 済み。ここでは探索順に採番し直す。
-            callback(Result.success(g.services.map { it.toMessage() }))
         }
     }
 
-    // 探索順に handle を採番しつつ DTO tree へ変換する。重複 UUID もそのまま保持する(Review guide §9)。
+    override fun onCharacteristicRead(
+        g: BluetoothGatt,
+        characteristic: BluetoothGattCharacteristic,
+        value: ByteArray,
+        status: Int,
+    ) {
+        // API 33+ は値引数付き callback。値は read 操作の戻り値として返す(Review guide §5/§10)。
+        main.post { completeRead(value, status) }
+    }
+
+    @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
+    override fun onCharacteristicRead(
+        g: BluetoothGatt,
+        characteristic: BluetoothGattCharacteristic,
+        status: Int,
+    ) {
+        val value = characteristic.value ?: ByteArray(0)
+        main.post { completeRead(value, status) }
+    }
+
+    override fun onCharacteristicWrite(
+        g: BluetoothGatt,
+        characteristic: BluetoothGattCharacteristic,
+        status: Int,
+    ) {
+        main.post {
+            completeInFlight<Unit>(CallbackKind.CHARACTERISTIC_WRITE) { op ->
+                op.completeUnit(status, "Characteristic write failed")
+            }
+        }
+    }
+
+    override fun onDescriptorRead(
+        g: BluetoothGatt,
+        descriptor: BluetoothGattDescriptor,
+        status: Int,
+        value: ByteArray,
+    ) {
+        main.post { completeDescriptorRead(value, status) }
+    }
+
+    @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
+    override fun onDescriptorRead(
+        g: BluetoothGatt,
+        descriptor: BluetoothGattDescriptor,
+        status: Int,
+    ) {
+        val value = descriptor.value ?: ByteArray(0)
+        main.post { completeDescriptorRead(value, status) }
+    }
+
+    override fun onDescriptorWrite(
+        g: BluetoothGatt,
+        descriptor: BluetoothGattDescriptor,
+        status: Int,
+    ) {
+        // setNotify(CCCD write)も通常の descriptor write も同じ callback で完了する。
+        main.post {
+            completeInFlight<Unit>(CallbackKind.DESCRIPTOR_WRITE) { op ->
+                op.completeUnit(status, "Descriptor write failed")
+            }
+        }
+    }
+
+    override fun onMtuChanged(g: BluetoothGatt, mtu: Int, status: Int) {
+        main.post {
+            completeInFlight<Long>(CallbackKind.MTU_CHANGED) { op ->
+                if (status == BluetoothGatt.GATT_SUCCESS) op.succeed(mtu.toLong())
+                else op.fail(bleError(BleErrorCode.FAILED, "MTU request failed (status=$status)"))
+            }
+        }
+    }
+
+    override fun onReadRemoteRssi(g: BluetoothGatt, rssi: Int, status: Int) {
+        main.post {
+            completeInFlight<Long>(CallbackKind.RSSI_READ) { op ->
+                if (status == BluetoothGatt.GATT_SUCCESS) op.succeed(rssi.toLong())
+                else op.fail(bleError(BleErrorCode.FAILED, "RSSI read failed (status=$status)"))
+            }
+        }
+    }
+
+    override fun onCharacteristicChanged(
+        g: BluetoothGatt,
+        characteristic: BluetoothGattCharacteristic,
+        value: ByteArray,
+    ) {
+        // notify/indicate はキューに載せず、handle を逆引きして通知ストリームへ直送する(Review guide §10)。
+        main.post { deliverNotification(characteristic, value) }
+    }
+
+    @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
+    override fun onCharacteristicChanged(
+        g: BluetoothGatt,
+        characteristic: BluetoothGattCharacteristic,
+    ) {
+        val value = characteristic.value ?: ByteArray(0)
+        main.post { deliverNotification(characteristic, value) }
+    }
+
+    // --- queue plumbing -------------------------------------------------
+
+    private fun <R> enqueueAndDispatch(kind: OperationKind, op: GattOp<R>) {
+        if (queue.isRetired) {
+            op.fail(bleError(BleErrorCode.NOT_CONNECTED, "Not connected"))
+            return
+        }
+        queue.enqueue(kind, op)
+        dispatchNext()
+    }
+
+    private fun dispatchNext() {
+        val g = gatt ?: return
+        val next = queue.startNext() ?: return
+        @Suppress("UNCHECKED_CAST")
+        val op = next.payload as GattOp<Any?>
+        when (val outcome = op.start(g)) {
+            StartOutcome.Issued -> armWatchdog()
+            is StartOutcome.Rejected -> {
+                // 実行を開始できなかった先頭はキューから外し、次へ進む(接続は保持する)。
+                queue.abortCurrent()
+                op.fail(outcome.error)
+                dispatchNext()
+            }
+        }
+    }
+
+    /**
+     * 先頭操作を到着 callback で完了する。現行 epoch と先頭 kind が [callbackKind] に整合した場合
+     * だけ [deliver] を呼び、watchdog を解除して次をディスパッチする。遅延・旧 epoch・想定外
+     * callback は何も完了しない(Review guide §10)。
+     */
+    private fun <R> completeInFlight(callbackKind: CallbackKind, deliver: (GattOp<R>) -> Unit) {
+        val op = queue.completeCurrent(connectionEpoch, callbackKind) ?: return
+        cancelWatchdog()
+        @Suppress("UNCHECKED_CAST")
+        deliver(op.payload as GattOp<R>)
+        dispatchNext()
+    }
+
+    private fun completeRead(value: ByteArray, status: Int) {
+        completeInFlight<ByteArray>(CallbackKind.CHARACTERISTIC_READ) { op ->
+            if (status == BluetoothGatt.GATT_SUCCESS) op.succeed(value)
+            else op.fail(bleError(BleErrorCode.FAILED, "Characteristic read failed (status=$status)"))
+        }
+    }
+
+    private fun completeDescriptorRead(value: ByteArray, status: Int) {
+        completeInFlight<ByteArray>(CallbackKind.DESCRIPTOR_READ) { op ->
+            if (status == BluetoothGatt.GATT_SUCCESS) op.succeed(value)
+            else op.fail(bleError(BleErrorCode.FAILED, "Descriptor read failed (status=$status)"))
+        }
+    }
+
+    private fun deliverNotification(characteristic: BluetoothGattCharacteristic, value: ByteArray) {
+        // 探索した instance から handle を逆引き。未探索なら handle が無く、取り違えを避けて破棄する。
+        val handle = handles.handleOf(characteristic) ?: return
+        owner.emitCharacteristicValue(deviceId, connectionEpoch, handle, value)
+    }
+
+    private fun armWatchdog() {
+        main.postDelayed(watchdog, OPERATION_TIMEOUT_MS)
+    }
+
+    private fun cancelWatchdog() {
+        main.removeCallbacks(watchdog)
+    }
+
+    /**
+     * 操作 timeout。同じ接続でキューを続行せず、接続実体を破棄し epoch を退役させる(Review guide §10)。
+     * 1) 未完了操作を timeout で完了 → 2) GATT を破棄 → 3) DISCONNECTED(operationTimeout) 通知 →
+     * 4) onOperationTimeout 通知 → 5) epoch 退役。再接続は body 側が新 epoch で行う。
+     */
+    private fun handleOperationTimeout() {
+        if (queue.isRetired) return
+        failQueue(bleError(BleErrorCode.TIMEOUT, "GATT operation timed out"))
+        releaseGatt()
+        owner.emitConnectionState(
+            deviceId, connectionEpoch,
+            ConnectionStateMessage.DISCONNECTED, DisconnectReasonMessage.OPERATION_TIMEOUT)
+        owner.onOperationTimeout(deviceId, connectionEpoch)
+        owner.onConnectionClosed(deviceId, connectionEpoch)
+    }
+
+    /** queue を退役させ、未完了操作を [error] で完了する。冪等。 */
+    private fun failQueue(error: FlutterError) {
+        if (queue.isRetired) return
+        for (op in queue.retire()) {
+            @Suppress("UNCHECKED_CAST")
+            (op.payload as GattOp<Any?>).fail(error)
+        }
+    }
+
+    /** native GATT リソースと handle を解放する。watchdog も止める。 */
+    private fun releaseGatt() {
+        cancelWatchdog()
+        gatt?.close()
+        gatt = null
+        isConnected = false
+        handles.clear()
+    }
+
+    // --- attribute resolution -------------------------------------------
+
+    private inline fun resolveCharacteristic(
+        characteristicHandle: Long,
+        onError: (FlutterError) -> Nothing,
+    ): BluetoothGattCharacteristic {
+        if (!isConnected) onError(bleError(BleErrorCode.NOT_CONNECTED, "Not connected"))
+        return handles.resolve(characteristicHandle) as? BluetoothGattCharacteristic
+            ?: onError(bleError(BleErrorCode.NOT_FOUND, "Unknown characteristic handle"))
+    }
+
+    private inline fun resolveDescriptor(
+        descriptorHandle: Long,
+        onError: (FlutterError) -> Nothing,
+    ): BluetoothGattDescriptor {
+        if (!isConnected) onError(bleError(BleErrorCode.NOT_CONNECTED, "Not connected"))
+        return handles.resolve(descriptorHandle) as? BluetoothGattDescriptor
+            ?: onError(bleError(BleErrorCode.NOT_FOUND, "Unknown descriptor handle"))
+    }
+
+    // --- native write compatibility (API 31-32 / 33+) -------------------
+
+    /**
+     * characteristic write を API 差分を吸収して発行する。busy(buffer-full)を正規化する:
+     * API 33+ は int 戻り値の `ERROR_GATT_WRITE_REQUEST_BUSY`、31-32 は boolean 版の `false` を
+     * いずれも [BleErrorCode.BUFFER_FULL] へ対応させる(Review guide §14 / Plan Task 9)。
+     */
+    @Suppress("DEPRECATION")
+    private fun startCharacteristicWrite(
+        g: BluetoothGatt,
+        c: BluetoothGattCharacteristic,
+        value: ByteArray,
+        withResponse: Boolean,
+    ): StartOutcome {
+        val writeType = if (withResponse) {
+            BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+        } else {
+            BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+        }
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            outcomeForWriteStatus(g.writeCharacteristic(c, value, writeType))
+        } else {
+            c.writeType = writeType
+            c.value = value
+            // 31-32 の boolean 版は busy を区別できないため、false を buffer-full へ正規化する。
+            if (g.writeCharacteristic(c)) StartOutcome.Issued
+            else StartOutcome.Rejected(
+                bleError(BleErrorCode.BUFFER_FULL, "Characteristic write buffer full"))
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun startDescriptorWrite(
+        g: BluetoothGatt,
+        d: BluetoothGattDescriptor,
+        value: ByteArray,
+    ): StartOutcome {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            outcomeForWriteStatus(g.writeDescriptor(d, value))
+        } else {
+            d.value = value
+            if (g.writeDescriptor(d)) StartOutcome.Issued
+            else StartOutcome.Rejected(
+                bleError(BleErrorCode.BUFFER_FULL, "Descriptor write buffer full"))
+        }
+    }
+
+    private fun outcomeForWriteStatus(status: Int): StartOutcome = when (status) {
+        BluetoothStatusCodes.SUCCESS -> StartOutcome.Issued
+        BluetoothStatusCodes.ERROR_GATT_WRITE_REQUEST_BUSY ->
+            StartOutcome.Rejected(bleError(BleErrorCode.BUFFER_FULL, "Write request busy"))
+        else ->
+            StartOutcome.Rejected(bleError(BleErrorCode.FAILED, "Write failed (status=$status)"))
+    }
+
+    // --- DTO 変換(探索順に handle 採番)--------------------------------
+
     private fun BluetoothGattService.toMessage(): ServiceMessage {
         val serviceHandle = handles.register(this)
         return ServiceMessage(
@@ -222,4 +592,47 @@ class GattConnection(
         handle = handles.register(this),
         uuid = uuid.toString(),
     )
+
+    companion object {
+        /** 操作 watchdog。満了で接続を破棄し epoch を退役させる(Review guide §10)。 */
+        private const val OPERATION_TIMEOUT_MS = 10_000L
+
+        /** Client Characteristic Configuration Descriptor(notify/indicate 有効化)。 */
+        private val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
+    }
+}
+
+/** queue 先頭操作の実行(`start`)結果。`Issued` は callback 待ち、`Rejected` は即時失敗。 */
+internal sealed interface StartOutcome {
+    object Issued : StartOutcome
+    data class Rejected(val error: FlutterError) : StartOutcome
+}
+
+/**
+ * queue に載せる GATT 操作1件。[start] で native GATT 呼び出しを発行し、到着 callback または
+ * timeout/切断で [completer] を1度だけ完了する。[completer] の値型 [R] は操作 kind ごとに固定。
+ */
+internal class GattOp<R>(
+    private val completer: (Result<R>) -> Unit,
+    val start: (BluetoothGatt) -> StartOutcome,
+) {
+    private var done = false
+
+    fun succeed(value: R) {
+        if (done) return
+        done = true
+        completer(Result.success(value))
+    }
+
+    fun fail(error: FlutterError) {
+        if (done) return
+        done = true
+        completer(Result.failure(error))
+    }
+}
+
+/** Unit 完了操作(write / setNotify)の status 完了ヘルパ。 */
+private fun GattOp<Unit>.completeUnit(status: Int, failMessage: String) {
+    if (status == BluetoothGatt.GATT_SUCCESS) succeed(Unit)
+    else fail(bleError(BleErrorCode.FAILED, "$failMessage (status=$status)"))
 }
