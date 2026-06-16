@@ -5,9 +5,9 @@ import android.content.Context
 /**
  * Flutter からの [BleHostApi] 呼び出しをプロセスグローバルな [BleProcessOwner] へ委譲する。
  *
- * このスライス(#20)のスコープ外メソッド(service discovery / read / write / notify /
- * descriptor / MTU / RSSI / associate / presence / background)は、後続 issue で本実装に
- * 置き換える前提の暫定エラーを返す。
+ * scan / connect / disconnect / service discovery を [BleProcessOwner] へ委譲する。
+ * スコープ外メソッド(read / write / notify / descriptor / MTU / RSSI / associate /
+ * presence / background)は、後続 issue で本実装に置き換える前提の暫定エラーを返す。
  */
 class BleCentralManager(private val context: Context) : BleHostApi {
 
@@ -47,7 +47,7 @@ class BleCentralManager(private val context: Context) : BleHostApi {
         deviceId: String,
         connectionEpoch: Long,
         callback: (Result<List<ServiceMessage>>) -> Unit,
-    ) = callback(notImplemented("discoverServices", "#21"))
+    ) = BleProcessOwner.discoverServices(deviceId, connectionEpoch, callback)
 
     override fun readCharacteristic(
         target: CharacteristicTargetMessage,

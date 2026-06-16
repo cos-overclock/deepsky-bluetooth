@@ -176,6 +176,25 @@ object BleProcessOwner {
         c.disconnect(callback)
     }
 
+    // --- service discovery ----------------------------------------------
+
+    /**
+     * 現在 epoch の接続に対してだけ service discovery を行う。接続が無い、または epoch が
+     * 古い要求は NotConnected で拒否する(Review guide §9 / §11)。
+     */
+    fun discoverServices(
+        deviceId: String,
+        connectionEpoch: Long,
+        callback: (Result<List<ServiceMessage>>) -> Unit,
+    ) {
+        val c = connections[deviceId]
+        if (c == null || c.connectionEpoch != connectionEpoch) {
+            callback(Result.failure(bleError(BleErrorCode.NOT_CONNECTED, "Not connected")))
+            return
+        }
+        c.discoverServices(callback)
+    }
+
     // --- connection callback guard --------------------------------------
 
     /**
