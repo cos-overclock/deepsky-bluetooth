@@ -4,22 +4,28 @@ import 'package:deepsky_bluetooth_interface/deepsky_bluetooth_interface.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:steady/steady.dart';
 
-final class _RecordingObserver implements DeepskyBluetoothObserver {
+final class _RecordingObserver extends DeepskyBluetoothCommonObserver {
   final calls = <String>[];
 
   @override
-  void onMethodStart(String methodName, Map<String, Object?> arguments) {
-    calls.add('start:$methodName:${arguments.keys.join(',')}');
+  void onConnectStart(DeepskyDeviceId deviceId) {
+    calls.add('connect-start:$deviceId');
   }
 
   @override
-  void onMethodEnd(String methodName, Result<Object?, Exception> result) {
-    calls.add('end:$methodName:${result.isOk}');
+  void onConnectEnd(
+    DeepskyDeviceId deviceId,
+    Result<ConnectionAttempt, ConnectError> result,
+  ) {
+    calls.add('connect-end:$deviceId:${result.ok?.connectionEpoch}');
   }
 
   @override
-  void onCallback(String callbackName, Object? payload) {
-    calls.add('cb:$callbackName:$payload');
+  void onNotifyEvent(BleNotifyEvent event) {
+    calls.add(
+      'notify:${event.deviceId}:${event.connectionEpoch}:'
+      '${event.characteristicHandle}',
+    );
   }
 }
 
@@ -245,17 +251,34 @@ void main() {
     expect(platform.stateResync, isA<Stream<BleStateResync>>());
   });
 
-  test('observer hooks record method lifecycle and callbacks', () {
+  test('common observer exposes typed method lifecycle and callback hooks', () {
     final observer = _RecordingObserver();
+    final event = BleNotifyEvent(
+      deviceId: const DeepskyDeviceId('device-1'),
+      connectionEpoch: 7,
+      characteristicHandle: 11,
+      value: Uint8List.fromList([1]),
+    );
 
-    observer.onMethodStart('connect', {'deviceId': 'device-1'});
-    observer.onMethodEnd('connect', const Result.ok(null));
-    observer.onCallback('notifyEvents', const DeepskyDeviceId('device-1'));
+    observer.onConnectStart(const DeepskyDeviceId('device-1'));
+    observer.onConnectEnd(
+      const DeepskyDeviceId('device-1'),
+      const Result.ok(ConnectionAttempt(connectionEpoch: 7)),
+    );
+    observer.onNotifyEvent(event);
 
     expect(observer.calls, [
-      'start:connect:deviceId',
-      'end:connect:true',
-      'cb:notifyEvents:device-1',
+      'connect-start:device-1',
+      'connect-end:device-1:7',
+      'notify:device-1:7:11',
     ]);
+  });
+
+  test('common observer default implementation is no-op', () {
+    const observer = DeepskyBluetoothCommonObserver();
+
+    observer.onStopScanStart();
+    observer.onStopScanEnd(const Result.ok(null));
+    observer.onScanError(const ScanBluetoothOff());
   });
 }

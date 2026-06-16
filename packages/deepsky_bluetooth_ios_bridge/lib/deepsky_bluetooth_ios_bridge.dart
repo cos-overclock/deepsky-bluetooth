@@ -1,3 +1,6 @@
+export 'package:deepsky_bluetooth_ios/deepsky_bluetooth_ios.dart'
+    show DeepskyBluetoothIosObserver;
+
 /// A Calculator.
 class Calculator {
   /// Returns [value] plus 1.

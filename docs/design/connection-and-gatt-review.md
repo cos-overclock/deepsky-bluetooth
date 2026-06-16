@@ -88,8 +88,14 @@
 
 ```dart
 class DeepskyBluetooth {
-  static Future<Result<DeepskyBluetooth, InitializeError>> foreground(...);
-  static Future<Result<DeepskyBluetooth, InitializeError>> background(...);
+  static Future<Result<DeepskyBluetooth, InitializeError>> foreground({
+    DeepskyBluetoothObservers observers = const DeepskyBluetoothObservers(),
+    ...
+  });
+  static Future<Result<DeepskyBluetooth, InitializeError>> background({
+    DeepskyBluetoothObservers observers = const DeepskyBluetoothObservers(),
+    ...
+  });
 
   Future<Result<void, ScanError>> startScan(...);
   Future<Result<void, ScanError>> stopScan();
@@ -106,6 +112,16 @@ class DeepskyBluetooth {
 
 `DeepskyBluetooth` はデバイス非依存の操作だけを持つ。`dispose()` 後のインスタンスは
 再利用できない。
+
+Observer は共通 Dart contract 用と platform native 用を分離する。共通 observer は
+`DeepskyBluetoothCommonObserver` とし、各公開操作ごとの `onXxxStart` / `onXxxEnd` と、
+各 callback ごとの `onXxx` を型付き no-op method として公開する。native observer は
+`DeepskyBluetoothAndroidObserver`、`DeepskyBluetoothIosObserver`、
+`DeepskyBluetoothMacosObserver` とし、native owner、GATT queue、epoch、handle、sink handover
+など platform 固有の診断を扱う。root package からは `DeepskyBluetoothObservers` で
+`common` / `android` / `ios` / `macos` の各 observer list を複数指定できる。実行中 platform
+以外の native observer は無視する。各 list は登録順に呼び、observer 例外は BLE 操作本体と
+後続 observer を止めない。
 
 ```dart
 class BluetoothDevice {
@@ -248,7 +264,7 @@ connected -> disconnected(reason) -> reconnecting -> connected
 - `connecting` は利用者が開始した初回試行だけに使う。
 - ライブラリが行う再試行は `reconnecting` とする。
 - 一時失敗時は `disconnected(reason)` と `reconnecting` を一度だけ通知する。
-- `reconnecting` 中の反復失敗は公開状態を反復せず Observer に記録する。
+- `reconnecting` 中の反復失敗は公開状態を反復せず common/native observer に記録する。
 - 終端理由を受けたら `disconnected(reason)` を通知して停止する。
 - 公開 stream は実際の状態遷移時だけ発行する。
 
