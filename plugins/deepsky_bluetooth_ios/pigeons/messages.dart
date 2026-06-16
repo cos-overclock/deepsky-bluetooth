@@ -145,7 +145,7 @@ enum DisconnectReasonMessage {
   unknown,
 }
 
-// disconnected callback/state snapshotでのみ使用する。
+// startScan の settings 引数で使用する。
 class DarwinScanSettingsMessage {
   DarwinScanSettingsMessage(this.allowDuplicates, this.solicitedServiceUuids);
   bool allowDuplicates;
