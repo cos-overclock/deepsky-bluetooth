@@ -13,7 +13,8 @@ package com.example.deepsky_bluetooth_android.core
  *
  * Bluetooth API へ一切依存しない pure state machine とし、FIFO 直列化・callback 相関・timeout
  * 退役の契約を local JVM test だけで検証できる(Review guide §10 / §16)。実際の `BluetoothGatt`
- * 呼び出し・watchdog timer・main thread への post は呼び出し側([GattConnection])が担い、本クラスは
+ * 呼び出し・watchdog timer・main thread への post は呼び出し側([GattConnection])が担い、本クラス自体は
+ * スレッドセーフではないため、呼び出し側が単一スレッドに直列化して扱う。
  * 「次に何を実行/完了/破棄するか」だけを決める。[QueuedOperation.payload] に completer 等を載せる。
  */
 class OperationQueueState<T>(val epoch: Long) {
