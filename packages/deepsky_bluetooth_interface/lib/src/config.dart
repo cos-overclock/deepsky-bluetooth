@@ -2,7 +2,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'config.freezed.dart';
 
-@freezed
+@Freezed(copyWith: false)
 sealed class DeepskyBluetoothConfig with _$DeepskyBluetoothConfig {
   const factory DeepskyBluetoothConfig.foreground() = ForegroundConfig;
 
@@ -13,13 +13,13 @@ sealed class DeepskyBluetoothConfig with _$DeepskyBluetoothConfig {
   }) = BackgroundConfig;
 }
 
-@freezed
+@Freezed(copyWith: false)
 abstract class IosBackgroundConfig with _$IosBackgroundConfig {
   const factory IosBackgroundConfig({required String restoreIdentifier}) =
       _IosBackgroundConfig;
 }
 
-@freezed
+@Freezed(copyWith: false)
 sealed class AndroidBackgroundConfig with _$AndroidBackgroundConfig {
   const factory AndroidBackgroundConfig.foregroundService({
     required AndroidNotificationConfig notification,
@@ -29,7 +29,7 @@ sealed class AndroidBackgroundConfig with _$AndroidBackgroundConfig {
       AndroidCompanionDeviceConfig;
 }
 
-@freezed
+@Freezed(copyWith: false)
 abstract class AndroidNotificationConfig with _$AndroidNotificationConfig {
   const factory AndroidNotificationConfig({
     required String channelId,

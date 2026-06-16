@@ -31,14 +31,14 @@ enum BleNotifyType { disable, notify, indicate }
 
 enum BleAdapterState { poweredOn, poweredOff, unavailable }
 
-@freezed
+@Freezed(copyWith: false)
 abstract class ReconnectPolicy with _$ReconnectPolicy {
   const factory ReconnectPolicy({
     @Default(Duration(seconds: 5)) Duration delay,
   }) = _ReconnectPolicy;
 }
 
-@freezed
+@Freezed(copyWith: false)
 abstract class BleConnectionEvent with _$BleConnectionEvent {
   @Assert(
     'state == BleConnectionState.disconnected ? reason != null : reason == null',
@@ -50,7 +50,7 @@ abstract class BleConnectionEvent with _$BleConnectionEvent {
   }) = _BleConnectionEvent;
 }
 
-@freezed
+@Freezed(copyWith: false)
 abstract class DeepskyScanFilterManufacturerData
     with _$DeepskyScanFilterManufacturerData {
   const factory DeepskyScanFilterManufacturerData({
@@ -59,7 +59,7 @@ abstract class DeepskyScanFilterManufacturerData
   }) = _DeepskyScanFilterManufacturerData;
 }
 
-@freezed
+@Freezed(copyWith: false)
 abstract class DeepskyScanFilterServiceData
     with _$DeepskyScanFilterServiceData {
   const factory DeepskyScanFilterServiceData({
@@ -68,7 +68,7 @@ abstract class DeepskyScanFilterServiceData
   }) = _DeepskyScanFilterServiceData;
 }
 
-@freezed
+@Freezed(copyWith: false)
 abstract class DeepskyScanFilter with _$DeepskyScanFilter {
   const factory DeepskyScanFilter({
     @Default(<DeepskyDeviceId>[]) List<DeepskyDeviceId> deviceIds,
@@ -100,7 +100,7 @@ enum DeepskyAndroidScanNumOfMatch {
 
 enum DeepskyAndroidScanPhy { le1m, leCoded, allSupported }
 
-@freezed
+@Freezed(copyWith: false)
 abstract class DeepskyAndroidScanSetting with _$DeepskyAndroidScanSetting {
   const factory DeepskyAndroidScanSetting({
     @Default(DeepskyAndroidScanMode.lowLatency) DeepskyAndroidScanMode mode,
@@ -116,7 +116,7 @@ abstract class DeepskyAndroidScanSetting with _$DeepskyAndroidScanSetting {
   }) = _DeepskyAndroidScanSetting;
 }
 
-@freezed
+@Freezed(copyWith: false)
 abstract class DeepskyDarwinScanSetting with _$DeepskyDarwinScanSetting {
   const factory DeepskyDarwinScanSetting({
     @Default(false) bool allowDuplicates,
@@ -124,7 +124,7 @@ abstract class DeepskyDarwinScanSetting with _$DeepskyDarwinScanSetting {
   }) = _DeepskyDarwinScanSetting;
 }
 
-@freezed
+@Freezed(copyWith: false)
 abstract class DeepskyScanOptions with _$DeepskyScanOptions {
   const factory DeepskyScanOptions({
     @Default(DeepskyAndroidScanSetting()) DeepskyAndroidScanSetting android,
@@ -132,7 +132,7 @@ abstract class DeepskyScanOptions with _$DeepskyScanOptions {
   }) = _DeepskyScanOptions;
 }
 
-@freezed
+@Freezed(copyWith: false)
 abstract class BleScanResult with _$BleScanResult {
   const factory BleScanResult({
     required DeepskyDeviceId deviceId,
@@ -144,7 +144,7 @@ abstract class BleScanResult with _$BleScanResult {
   }) = _BleScanResult;
 }
 
-@freezed
+@Freezed(copyWith: false)
 abstract class BleCharacteristicProperties with _$BleCharacteristicProperties {
   const factory BleCharacteristicProperties({
     @Default(false) bool broadcast,
@@ -158,7 +158,7 @@ abstract class BleCharacteristicProperties with _$BleCharacteristicProperties {
   }) = _BleCharacteristicProperties;
 }
 
-@freezed
+@Freezed(copyWith: false)
 abstract class BleServiceInfo with _$BleServiceInfo {
   @Assert('handle >= 0', 'handle must be non-negative')
   const factory BleServiceInfo({
@@ -169,7 +169,7 @@ abstract class BleServiceInfo with _$BleServiceInfo {
   }) = _BleServiceInfo;
 }
 
-@freezed
+@Freezed(copyWith: false)
 abstract class BleCharacteristicInfo with _$BleCharacteristicInfo {
   @Assert('handle >= 0', 'handle must be non-negative')
   @Assert('serviceHandle >= 0', 'serviceHandle must be non-negative')
@@ -182,7 +182,7 @@ abstract class BleCharacteristicInfo with _$BleCharacteristicInfo {
   }) = _BleCharacteristicInfo;
 }
 
-@freezed
+@Freezed(copyWith: false)
 abstract class BleDescriptorInfo with _$BleDescriptorInfo {
   @Assert('handle >= 0', 'handle must be non-negative')
   const factory BleDescriptorInfo({
@@ -191,7 +191,7 @@ abstract class BleDescriptorInfo with _$BleDescriptorInfo {
   }) = _BleDescriptorInfo;
 }
 
-@freezed
+@Freezed(copyWith: false)
 abstract class BleCharacteristicTarget with _$BleCharacteristicTarget {
   @Assert('connectionEpoch >= 0', 'connectionEpoch must be non-negative')
   @Assert('characteristicHandle >= 0', 'handle must be non-negative')
@@ -202,7 +202,7 @@ abstract class BleCharacteristicTarget with _$BleCharacteristicTarget {
   }) = _BleCharacteristicTarget;
 }
 
-@freezed
+@Freezed(copyWith: false)
 abstract class BleDescriptorTarget with _$BleDescriptorTarget {
   @Assert('connectionEpoch >= 0', 'connectionEpoch must be non-negative')
   @Assert('characteristicHandle >= 0', 'handle must be non-negative')
@@ -215,14 +215,14 @@ abstract class BleDescriptorTarget with _$BleDescriptorTarget {
   }) = _BleDescriptorTarget;
 }
 
-@freezed
+@Freezed(copyWith: false)
 abstract class ConnectionAttempt with _$ConnectionAttempt {
   @Assert('connectionEpoch >= 0', 'connectionEpoch must be non-negative')
   const factory ConnectionAttempt({required int connectionEpoch}) =
       _ConnectionAttempt;
 }
 
-@freezed
+@Freezed(copyWith: false)
 abstract class BlePlatformConnectionEvent with _$BlePlatformConnectionEvent {
   @Assert(
     'state == BleConnectionState.disconnected ? reason != null : reason == null',
@@ -240,7 +240,7 @@ abstract class BlePlatformConnectionEvent with _$BlePlatformConnectionEvent {
   }) = _BlePlatformConnectionEvent;
 }
 
-@freezed
+@Freezed(copyWith: false)
 abstract class BleNotifyEvent with _$BleNotifyEvent {
   @Assert('connectionEpoch >= 0', 'connectionEpoch must be non-negative')
   @Assert('characteristicHandle >= 0', 'handle must be non-negative')
@@ -252,7 +252,7 @@ abstract class BleNotifyEvent with _$BleNotifyEvent {
   }) = _BleNotifyEvent;
 }
 
-@freezed
+@Freezed(copyWith: false)
 abstract class BleOperationTimeout with _$BleOperationTimeout {
   @Assert('connectionEpoch >= 0', 'connectionEpoch must be non-negative')
   const factory BleOperationTimeout({
@@ -261,7 +261,7 @@ abstract class BleOperationTimeout with _$BleOperationTimeout {
   }) = _BleOperationTimeout;
 }
 
-@freezed
+@Freezed(copyWith: false)
 abstract class BleCompanionEvent with _$BleCompanionEvent {
   const factory BleCompanionEvent({
     required DeepskyDeviceId deviceId,
@@ -269,7 +269,7 @@ abstract class BleCompanionEvent with _$BleCompanionEvent {
   }) = _BleCompanionEvent;
 }
 
-@freezed
+@Freezed(copyWith: false)
 abstract class BleStateSnapshot with _$BleStateSnapshot {
   @Assert('connectionEpoch >= 0', 'connectionEpoch must be non-negative')
   @Assert(
@@ -287,7 +287,7 @@ abstract class BleStateSnapshot with _$BleStateSnapshot {
   }) = _BleStateSnapshot;
 }
 
-@freezed
+@Freezed(copyWith: false)
 abstract class BleStateResync with _$BleStateResync {
   const factory BleStateResync({
     required String snapshotId,

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:deepsky_bluetooth_interface/deepsky_bluetooth_interface.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -40,12 +42,6 @@ void main() {
           backgroundCallbackHandle: 42,
         ),
       );
-      expect(
-        (background as BackgroundConfig)
-            .copyWith(backgroundCallbackHandle: 84)
-            .backgroundCallbackHandle,
-        84,
-      );
     },
   );
 
@@ -58,5 +54,15 @@ void main() {
     };
 
     expect(kind, 'companion-device');
+  });
+
+  test('config data classes disable generated copyWith', () {
+    final sourceFile = File('lib/src/config.dart').existsSync()
+        ? File('lib/src/config.dart')
+        : File('packages/deepsky_bluetooth_interface/lib/src/config.dart');
+    final source = sourceFile.readAsStringSync();
+
+    expect(source, isNot(contains('@freezed')));
+    expect(source, contains('@Freezed(copyWith: false)'));
   });
 }

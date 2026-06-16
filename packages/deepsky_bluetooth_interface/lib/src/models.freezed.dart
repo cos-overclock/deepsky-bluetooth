@@ -15,11 +15,6 @@ T _$identity<T>(T value) => value;
 mixin _$ReconnectPolicy {
 
  Duration get delay;
-/// Create a copy of ReconnectPolicy
-/// with the given fields replaced by the non-null parameter values.
-@JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-$ReconnectPolicyCopyWith<ReconnectPolicy> get copyWith => _$ReconnectPolicyCopyWithImpl<ReconnectPolicy>(this as ReconnectPolicy, _$identity);
 
 
 
@@ -40,36 +35,7 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class $ReconnectPolicyCopyWith<$Res>  {
-  factory $ReconnectPolicyCopyWith(ReconnectPolicy value, $Res Function(ReconnectPolicy) _then) = _$ReconnectPolicyCopyWithImpl;
-@useResult
-$Res call({
- Duration delay
-});
 
-
-
-
-}
-/// @nodoc
-class _$ReconnectPolicyCopyWithImpl<$Res>
-    implements $ReconnectPolicyCopyWith<$Res> {
-  _$ReconnectPolicyCopyWithImpl(this._self, this._then);
-
-  final ReconnectPolicy _self;
-  final $Res Function(ReconnectPolicy) _then;
-
-/// Create a copy of ReconnectPolicy
-/// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? delay = null,}) {
-  return _then(_self.copyWith(
-delay: null == delay ? _self.delay : delay // ignore: cast_nullable_to_non_nullable
-as Duration,
-  ));
-}
-
-}
 
 
 /// Adds pattern-matching-related methods to [ReconnectPolicy].
@@ -211,11 +177,6 @@ class _ReconnectPolicy implements ReconnectPolicy {
 
 @override@JsonKey() final  Duration delay;
 
-/// Create a copy of ReconnectPolicy
-/// with the given fields replaced by the non-null parameter values.
-@override @JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-_$ReconnectPolicyCopyWith<_ReconnectPolicy> get copyWith => __$ReconnectPolicyCopyWithImpl<_ReconnectPolicy>(this, _$identity);
 
 
 
@@ -236,47 +197,13 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class _$ReconnectPolicyCopyWith<$Res> implements $ReconnectPolicyCopyWith<$Res> {
-  factory _$ReconnectPolicyCopyWith(_ReconnectPolicy value, $Res Function(_ReconnectPolicy) _then) = __$ReconnectPolicyCopyWithImpl;
-@override @useResult
-$Res call({
- Duration delay
-});
 
 
-
-
-}
-/// @nodoc
-class __$ReconnectPolicyCopyWithImpl<$Res>
-    implements _$ReconnectPolicyCopyWith<$Res> {
-  __$ReconnectPolicyCopyWithImpl(this._self, this._then);
-
-  final _ReconnectPolicy _self;
-  final $Res Function(_ReconnectPolicy) _then;
-
-/// Create a copy of ReconnectPolicy
-/// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? delay = null,}) {
-  return _then(_ReconnectPolicy(
-delay: null == delay ? _self.delay : delay // ignore: cast_nullable_to_non_nullable
-as Duration,
-  ));
-}
-
-
-}
 
 /// @nodoc
 mixin _$BleConnectionEvent {
 
  BleConnectionState get state; BleDisconnectReason? get reason;
-/// Create a copy of BleConnectionEvent
-/// with the given fields replaced by the non-null parameter values.
-@JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-$BleConnectionEventCopyWith<BleConnectionEvent> get copyWith => _$BleConnectionEventCopyWithImpl<BleConnectionEvent>(this as BleConnectionEvent, _$identity);
 
 
 
@@ -297,37 +224,7 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class $BleConnectionEventCopyWith<$Res>  {
-  factory $BleConnectionEventCopyWith(BleConnectionEvent value, $Res Function(BleConnectionEvent) _then) = _$BleConnectionEventCopyWithImpl;
-@useResult
-$Res call({
- BleConnectionState state, BleDisconnectReason? reason
-});
 
-
-
-
-}
-/// @nodoc
-class _$BleConnectionEventCopyWithImpl<$Res>
-    implements $BleConnectionEventCopyWith<$Res> {
-  _$BleConnectionEventCopyWithImpl(this._self, this._then);
-
-  final BleConnectionEvent _self;
-  final $Res Function(BleConnectionEvent) _then;
-
-/// Create a copy of BleConnectionEvent
-/// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? state = null,Object? reason = freezed,}) {
-  return _then(_self.copyWith(
-state: null == state ? _self.state : state // ignore: cast_nullable_to_non_nullable
-as BleConnectionState,reason: freezed == reason ? _self.reason : reason // ignore: cast_nullable_to_non_nullable
-as BleDisconnectReason?,
-  ));
-}
-
-}
 
 
 /// Adds pattern-matching-related methods to [BleConnectionEvent].
@@ -470,11 +367,6 @@ class _BleConnectionEvent implements BleConnectionEvent {
 @override final  BleConnectionState state;
 @override final  BleDisconnectReason? reason;
 
-/// Create a copy of BleConnectionEvent
-/// with the given fields replaced by the non-null parameter values.
-@override @JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-_$BleConnectionEventCopyWith<_BleConnectionEvent> get copyWith => __$BleConnectionEventCopyWithImpl<_BleConnectionEvent>(this, _$identity);
 
 
 
@@ -495,48 +387,13 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class _$BleConnectionEventCopyWith<$Res> implements $BleConnectionEventCopyWith<$Res> {
-  factory _$BleConnectionEventCopyWith(_BleConnectionEvent value, $Res Function(_BleConnectionEvent) _then) = __$BleConnectionEventCopyWithImpl;
-@override @useResult
-$Res call({
- BleConnectionState state, BleDisconnectReason? reason
-});
 
 
-
-
-}
-/// @nodoc
-class __$BleConnectionEventCopyWithImpl<$Res>
-    implements _$BleConnectionEventCopyWith<$Res> {
-  __$BleConnectionEventCopyWithImpl(this._self, this._then);
-
-  final _BleConnectionEvent _self;
-  final $Res Function(_BleConnectionEvent) _then;
-
-/// Create a copy of BleConnectionEvent
-/// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? state = null,Object? reason = freezed,}) {
-  return _then(_BleConnectionEvent(
-state: null == state ? _self.state : state // ignore: cast_nullable_to_non_nullable
-as BleConnectionState,reason: freezed == reason ? _self.reason : reason // ignore: cast_nullable_to_non_nullable
-as BleDisconnectReason?,
-  ));
-}
-
-
-}
 
 /// @nodoc
 mixin _$DeepskyScanFilterManufacturerData {
 
  int get manufacturerId; Uint8List get data;
-/// Create a copy of DeepskyScanFilterManufacturerData
-/// with the given fields replaced by the non-null parameter values.
-@JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-$DeepskyScanFilterManufacturerDataCopyWith<DeepskyScanFilterManufacturerData> get copyWith => _$DeepskyScanFilterManufacturerDataCopyWithImpl<DeepskyScanFilterManufacturerData>(this as DeepskyScanFilterManufacturerData, _$identity);
 
 
 
@@ -557,37 +414,7 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class $DeepskyScanFilterManufacturerDataCopyWith<$Res>  {
-  factory $DeepskyScanFilterManufacturerDataCopyWith(DeepskyScanFilterManufacturerData value, $Res Function(DeepskyScanFilterManufacturerData) _then) = _$DeepskyScanFilterManufacturerDataCopyWithImpl;
-@useResult
-$Res call({
- int manufacturerId, Uint8List data
-});
 
-
-
-
-}
-/// @nodoc
-class _$DeepskyScanFilterManufacturerDataCopyWithImpl<$Res>
-    implements $DeepskyScanFilterManufacturerDataCopyWith<$Res> {
-  _$DeepskyScanFilterManufacturerDataCopyWithImpl(this._self, this._then);
-
-  final DeepskyScanFilterManufacturerData _self;
-  final $Res Function(DeepskyScanFilterManufacturerData) _then;
-
-/// Create a copy of DeepskyScanFilterManufacturerData
-/// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? manufacturerId = null,Object? data = null,}) {
-  return _then(_self.copyWith(
-manufacturerId: null == manufacturerId ? _self.manufacturerId : manufacturerId // ignore: cast_nullable_to_non_nullable
-as int,data: null == data ? _self.data : data // ignore: cast_nullable_to_non_nullable
-as Uint8List,
-  ));
-}
-
-}
 
 
 /// Adds pattern-matching-related methods to [DeepskyScanFilterManufacturerData].
@@ -730,11 +557,6 @@ class _DeepskyScanFilterManufacturerData implements DeepskyScanFilterManufacture
 @override final  int manufacturerId;
 @override final  Uint8List data;
 
-/// Create a copy of DeepskyScanFilterManufacturerData
-/// with the given fields replaced by the non-null parameter values.
-@override @JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-_$DeepskyScanFilterManufacturerDataCopyWith<_DeepskyScanFilterManufacturerData> get copyWith => __$DeepskyScanFilterManufacturerDataCopyWithImpl<_DeepskyScanFilterManufacturerData>(this, _$identity);
 
 
 
@@ -755,48 +577,13 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class _$DeepskyScanFilterManufacturerDataCopyWith<$Res> implements $DeepskyScanFilterManufacturerDataCopyWith<$Res> {
-  factory _$DeepskyScanFilterManufacturerDataCopyWith(_DeepskyScanFilterManufacturerData value, $Res Function(_DeepskyScanFilterManufacturerData) _then) = __$DeepskyScanFilterManufacturerDataCopyWithImpl;
-@override @useResult
-$Res call({
- int manufacturerId, Uint8List data
-});
 
 
-
-
-}
-/// @nodoc
-class __$DeepskyScanFilterManufacturerDataCopyWithImpl<$Res>
-    implements _$DeepskyScanFilterManufacturerDataCopyWith<$Res> {
-  __$DeepskyScanFilterManufacturerDataCopyWithImpl(this._self, this._then);
-
-  final _DeepskyScanFilterManufacturerData _self;
-  final $Res Function(_DeepskyScanFilterManufacturerData) _then;
-
-/// Create a copy of DeepskyScanFilterManufacturerData
-/// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? manufacturerId = null,Object? data = null,}) {
-  return _then(_DeepskyScanFilterManufacturerData(
-manufacturerId: null == manufacturerId ? _self.manufacturerId : manufacturerId // ignore: cast_nullable_to_non_nullable
-as int,data: null == data ? _self.data : data // ignore: cast_nullable_to_non_nullable
-as Uint8List,
-  ));
-}
-
-
-}
 
 /// @nodoc
 mixin _$DeepskyScanFilterServiceData {
 
  DeepskyUuid get uuid; Uint8List get data;
-/// Create a copy of DeepskyScanFilterServiceData
-/// with the given fields replaced by the non-null parameter values.
-@JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-$DeepskyScanFilterServiceDataCopyWith<DeepskyScanFilterServiceData> get copyWith => _$DeepskyScanFilterServiceDataCopyWithImpl<DeepskyScanFilterServiceData>(this as DeepskyScanFilterServiceData, _$identity);
 
 
 
@@ -817,46 +604,7 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class $DeepskyScanFilterServiceDataCopyWith<$Res>  {
-  factory $DeepskyScanFilterServiceDataCopyWith(DeepskyScanFilterServiceData value, $Res Function(DeepskyScanFilterServiceData) _then) = _$DeepskyScanFilterServiceDataCopyWithImpl;
-@useResult
-$Res call({
- DeepskyUuid uuid, Uint8List data
-});
 
-
-$DeepskyUuidCopyWith<$Res> get uuid;
-
-}
-/// @nodoc
-class _$DeepskyScanFilterServiceDataCopyWithImpl<$Res>
-    implements $DeepskyScanFilterServiceDataCopyWith<$Res> {
-  _$DeepskyScanFilterServiceDataCopyWithImpl(this._self, this._then);
-
-  final DeepskyScanFilterServiceData _self;
-  final $Res Function(DeepskyScanFilterServiceData) _then;
-
-/// Create a copy of DeepskyScanFilterServiceData
-/// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? uuid = null,Object? data = null,}) {
-  return _then(_self.copyWith(
-uuid: null == uuid ? _self.uuid : uuid // ignore: cast_nullable_to_non_nullable
-as DeepskyUuid,data: null == data ? _self.data : data // ignore: cast_nullable_to_non_nullable
-as Uint8List,
-  ));
-}
-/// Create a copy of DeepskyScanFilterServiceData
-/// with the given fields replaced by the non-null parameter values.
-@override
-@pragma('vm:prefer-inline')
-$DeepskyUuidCopyWith<$Res> get uuid {
-
-  return $DeepskyUuidCopyWith<$Res>(_self.uuid, (value) {
-    return _then(_self.copyWith(uuid: value));
-  });
-}
-}
 
 
 /// Adds pattern-matching-related methods to [DeepskyScanFilterServiceData].
@@ -999,11 +747,6 @@ class _DeepskyScanFilterServiceData implements DeepskyScanFilterServiceData {
 @override final  DeepskyUuid uuid;
 @override final  Uint8List data;
 
-/// Create a copy of DeepskyScanFilterServiceData
-/// with the given fields replaced by the non-null parameter values.
-@override @JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-_$DeepskyScanFilterServiceDataCopyWith<_DeepskyScanFilterServiceData> get copyWith => __$DeepskyScanFilterServiceDataCopyWithImpl<_DeepskyScanFilterServiceData>(this, _$identity);
 
 
 
@@ -1024,57 +767,13 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class _$DeepskyScanFilterServiceDataCopyWith<$Res> implements $DeepskyScanFilterServiceDataCopyWith<$Res> {
-  factory _$DeepskyScanFilterServiceDataCopyWith(_DeepskyScanFilterServiceData value, $Res Function(_DeepskyScanFilterServiceData) _then) = __$DeepskyScanFilterServiceDataCopyWithImpl;
-@override @useResult
-$Res call({
- DeepskyUuid uuid, Uint8List data
-});
 
 
-@override $DeepskyUuidCopyWith<$Res> get uuid;
-
-}
-/// @nodoc
-class __$DeepskyScanFilterServiceDataCopyWithImpl<$Res>
-    implements _$DeepskyScanFilterServiceDataCopyWith<$Res> {
-  __$DeepskyScanFilterServiceDataCopyWithImpl(this._self, this._then);
-
-  final _DeepskyScanFilterServiceData _self;
-  final $Res Function(_DeepskyScanFilterServiceData) _then;
-
-/// Create a copy of DeepskyScanFilterServiceData
-/// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? uuid = null,Object? data = null,}) {
-  return _then(_DeepskyScanFilterServiceData(
-uuid: null == uuid ? _self.uuid : uuid // ignore: cast_nullable_to_non_nullable
-as DeepskyUuid,data: null == data ? _self.data : data // ignore: cast_nullable_to_non_nullable
-as Uint8List,
-  ));
-}
-
-/// Create a copy of DeepskyScanFilterServiceData
-/// with the given fields replaced by the non-null parameter values.
-@override
-@pragma('vm:prefer-inline')
-$DeepskyUuidCopyWith<$Res> get uuid {
-
-  return $DeepskyUuidCopyWith<$Res>(_self.uuid, (value) {
-    return _then(_self.copyWith(uuid: value));
-  });
-}
-}
 
 /// @nodoc
 mixin _$DeepskyScanFilter {
 
  List<DeepskyDeviceId> get deviceIds; List<String> get names; List<DeepskyScanFilterManufacturerData> get manufacturerData; List<DeepskyScanFilterServiceData> get serviceData; List<DeepskyUuid> get serviceUuids;
-/// Create a copy of DeepskyScanFilter
-/// with the given fields replaced by the non-null parameter values.
-@JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-$DeepskyScanFilterCopyWith<DeepskyScanFilter> get copyWith => _$DeepskyScanFilterCopyWithImpl<DeepskyScanFilter>(this as DeepskyScanFilter, _$identity);
 
 
 
@@ -1095,40 +794,7 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class $DeepskyScanFilterCopyWith<$Res>  {
-  factory $DeepskyScanFilterCopyWith(DeepskyScanFilter value, $Res Function(DeepskyScanFilter) _then) = _$DeepskyScanFilterCopyWithImpl;
-@useResult
-$Res call({
- List<DeepskyDeviceId> deviceIds, List<String> names, List<DeepskyScanFilterManufacturerData> manufacturerData, List<DeepskyScanFilterServiceData> serviceData, List<DeepskyUuid> serviceUuids
-});
 
-
-
-
-}
-/// @nodoc
-class _$DeepskyScanFilterCopyWithImpl<$Res>
-    implements $DeepskyScanFilterCopyWith<$Res> {
-  _$DeepskyScanFilterCopyWithImpl(this._self, this._then);
-
-  final DeepskyScanFilter _self;
-  final $Res Function(DeepskyScanFilter) _then;
-
-/// Create a copy of DeepskyScanFilter
-/// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? deviceIds = null,Object? names = null,Object? manufacturerData = null,Object? serviceData = null,Object? serviceUuids = null,}) {
-  return _then(_self.copyWith(
-deviceIds: null == deviceIds ? _self.deviceIds : deviceIds // ignore: cast_nullable_to_non_nullable
-as List<DeepskyDeviceId>,names: null == names ? _self.names : names // ignore: cast_nullable_to_non_nullable
-as List<String>,manufacturerData: null == manufacturerData ? _self.manufacturerData : manufacturerData // ignore: cast_nullable_to_non_nullable
-as List<DeepskyScanFilterManufacturerData>,serviceData: null == serviceData ? _self.serviceData : serviceData // ignore: cast_nullable_to_non_nullable
-as List<DeepskyScanFilterServiceData>,serviceUuids: null == serviceUuids ? _self.serviceUuids : serviceUuids // ignore: cast_nullable_to_non_nullable
-as List<DeepskyUuid>,
-  ));
-}
-
-}
 
 
 /// Adds pattern-matching-related methods to [DeepskyScanFilter].
@@ -1304,11 +970,6 @@ class _DeepskyScanFilter implements DeepskyScanFilter {
 }
 
 
-/// Create a copy of DeepskyScanFilter
-/// with the given fields replaced by the non-null parameter values.
-@override @JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-_$DeepskyScanFilterCopyWith<_DeepskyScanFilter> get copyWith => __$DeepskyScanFilterCopyWithImpl<_DeepskyScanFilter>(this, _$identity);
 
 
 
@@ -1329,51 +990,13 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class _$DeepskyScanFilterCopyWith<$Res> implements $DeepskyScanFilterCopyWith<$Res> {
-  factory _$DeepskyScanFilterCopyWith(_DeepskyScanFilter value, $Res Function(_DeepskyScanFilter) _then) = __$DeepskyScanFilterCopyWithImpl;
-@override @useResult
-$Res call({
- List<DeepskyDeviceId> deviceIds, List<String> names, List<DeepskyScanFilterManufacturerData> manufacturerData, List<DeepskyScanFilterServiceData> serviceData, List<DeepskyUuid> serviceUuids
-});
 
 
-
-
-}
-/// @nodoc
-class __$DeepskyScanFilterCopyWithImpl<$Res>
-    implements _$DeepskyScanFilterCopyWith<$Res> {
-  __$DeepskyScanFilterCopyWithImpl(this._self, this._then);
-
-  final _DeepskyScanFilter _self;
-  final $Res Function(_DeepskyScanFilter) _then;
-
-/// Create a copy of DeepskyScanFilter
-/// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? deviceIds = null,Object? names = null,Object? manufacturerData = null,Object? serviceData = null,Object? serviceUuids = null,}) {
-  return _then(_DeepskyScanFilter(
-deviceIds: null == deviceIds ? _self._deviceIds : deviceIds // ignore: cast_nullable_to_non_nullable
-as List<DeepskyDeviceId>,names: null == names ? _self._names : names // ignore: cast_nullable_to_non_nullable
-as List<String>,manufacturerData: null == manufacturerData ? _self._manufacturerData : manufacturerData // ignore: cast_nullable_to_non_nullable
-as List<DeepskyScanFilterManufacturerData>,serviceData: null == serviceData ? _self._serviceData : serviceData // ignore: cast_nullable_to_non_nullable
-as List<DeepskyScanFilterServiceData>,serviceUuids: null == serviceUuids ? _self._serviceUuids : serviceUuids // ignore: cast_nullable_to_non_nullable
-as List<DeepskyUuid>,
-  ));
-}
-
-
-}
 
 /// @nodoc
 mixin _$DeepskyAndroidScanSetting {
 
  DeepskyAndroidScanMode get mode; DeepskyAndroidScanCallbackType get callbackType; bool get onlyLegacy; DeepskyAndroidScanMatchMode get matchMode; DeepskyAndroidScanNumOfMatch get numOfMatch; Duration get reportDelay; DeepskyAndroidScanPhy get phy;
-/// Create a copy of DeepskyAndroidScanSetting
-/// with the given fields replaced by the non-null parameter values.
-@JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-$DeepskyAndroidScanSettingCopyWith<DeepskyAndroidScanSetting> get copyWith => _$DeepskyAndroidScanSettingCopyWithImpl<DeepskyAndroidScanSetting>(this as DeepskyAndroidScanSetting, _$identity);
 
 
 
@@ -1394,42 +1017,7 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class $DeepskyAndroidScanSettingCopyWith<$Res>  {
-  factory $DeepskyAndroidScanSettingCopyWith(DeepskyAndroidScanSetting value, $Res Function(DeepskyAndroidScanSetting) _then) = _$DeepskyAndroidScanSettingCopyWithImpl;
-@useResult
-$Res call({
- DeepskyAndroidScanMode mode, DeepskyAndroidScanCallbackType callbackType, bool onlyLegacy, DeepskyAndroidScanMatchMode matchMode, DeepskyAndroidScanNumOfMatch numOfMatch, Duration reportDelay, DeepskyAndroidScanPhy phy
-});
 
-
-
-
-}
-/// @nodoc
-class _$DeepskyAndroidScanSettingCopyWithImpl<$Res>
-    implements $DeepskyAndroidScanSettingCopyWith<$Res> {
-  _$DeepskyAndroidScanSettingCopyWithImpl(this._self, this._then);
-
-  final DeepskyAndroidScanSetting _self;
-  final $Res Function(DeepskyAndroidScanSetting) _then;
-
-/// Create a copy of DeepskyAndroidScanSetting
-/// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? mode = null,Object? callbackType = null,Object? onlyLegacy = null,Object? matchMode = null,Object? numOfMatch = null,Object? reportDelay = null,Object? phy = null,}) {
-  return _then(_self.copyWith(
-mode: null == mode ? _self.mode : mode // ignore: cast_nullable_to_non_nullable
-as DeepskyAndroidScanMode,callbackType: null == callbackType ? _self.callbackType : callbackType // ignore: cast_nullable_to_non_nullable
-as DeepskyAndroidScanCallbackType,onlyLegacy: null == onlyLegacy ? _self.onlyLegacy : onlyLegacy // ignore: cast_nullable_to_non_nullable
-as bool,matchMode: null == matchMode ? _self.matchMode : matchMode // ignore: cast_nullable_to_non_nullable
-as DeepskyAndroidScanMatchMode,numOfMatch: null == numOfMatch ? _self.numOfMatch : numOfMatch // ignore: cast_nullable_to_non_nullable
-as DeepskyAndroidScanNumOfMatch,reportDelay: null == reportDelay ? _self.reportDelay : reportDelay // ignore: cast_nullable_to_non_nullable
-as Duration,phy: null == phy ? _self.phy : phy // ignore: cast_nullable_to_non_nullable
-as DeepskyAndroidScanPhy,
-  ));
-}
-
-}
 
 
 /// Adds pattern-matching-related methods to [DeepskyAndroidScanSetting].
@@ -1577,11 +1165,6 @@ class _DeepskyAndroidScanSetting implements DeepskyAndroidScanSetting {
 @override@JsonKey() final  Duration reportDelay;
 @override@JsonKey() final  DeepskyAndroidScanPhy phy;
 
-/// Create a copy of DeepskyAndroidScanSetting
-/// with the given fields replaced by the non-null parameter values.
-@override @JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-_$DeepskyAndroidScanSettingCopyWith<_DeepskyAndroidScanSetting> get copyWith => __$DeepskyAndroidScanSettingCopyWithImpl<_DeepskyAndroidScanSetting>(this, _$identity);
 
 
 
@@ -1602,53 +1185,13 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class _$DeepskyAndroidScanSettingCopyWith<$Res> implements $DeepskyAndroidScanSettingCopyWith<$Res> {
-  factory _$DeepskyAndroidScanSettingCopyWith(_DeepskyAndroidScanSetting value, $Res Function(_DeepskyAndroidScanSetting) _then) = __$DeepskyAndroidScanSettingCopyWithImpl;
-@override @useResult
-$Res call({
- DeepskyAndroidScanMode mode, DeepskyAndroidScanCallbackType callbackType, bool onlyLegacy, DeepskyAndroidScanMatchMode matchMode, DeepskyAndroidScanNumOfMatch numOfMatch, Duration reportDelay, DeepskyAndroidScanPhy phy
-});
 
 
-
-
-}
-/// @nodoc
-class __$DeepskyAndroidScanSettingCopyWithImpl<$Res>
-    implements _$DeepskyAndroidScanSettingCopyWith<$Res> {
-  __$DeepskyAndroidScanSettingCopyWithImpl(this._self, this._then);
-
-  final _DeepskyAndroidScanSetting _self;
-  final $Res Function(_DeepskyAndroidScanSetting) _then;
-
-/// Create a copy of DeepskyAndroidScanSetting
-/// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? mode = null,Object? callbackType = null,Object? onlyLegacy = null,Object? matchMode = null,Object? numOfMatch = null,Object? reportDelay = null,Object? phy = null,}) {
-  return _then(_DeepskyAndroidScanSetting(
-mode: null == mode ? _self.mode : mode // ignore: cast_nullable_to_non_nullable
-as DeepskyAndroidScanMode,callbackType: null == callbackType ? _self.callbackType : callbackType // ignore: cast_nullable_to_non_nullable
-as DeepskyAndroidScanCallbackType,onlyLegacy: null == onlyLegacy ? _self.onlyLegacy : onlyLegacy // ignore: cast_nullable_to_non_nullable
-as bool,matchMode: null == matchMode ? _self.matchMode : matchMode // ignore: cast_nullable_to_non_nullable
-as DeepskyAndroidScanMatchMode,numOfMatch: null == numOfMatch ? _self.numOfMatch : numOfMatch // ignore: cast_nullable_to_non_nullable
-as DeepskyAndroidScanNumOfMatch,reportDelay: null == reportDelay ? _self.reportDelay : reportDelay // ignore: cast_nullable_to_non_nullable
-as Duration,phy: null == phy ? _self.phy : phy // ignore: cast_nullable_to_non_nullable
-as DeepskyAndroidScanPhy,
-  ));
-}
-
-
-}
 
 /// @nodoc
 mixin _$DeepskyDarwinScanSetting {
 
  bool get allowDuplicates; List<DeepskyUuid> get solicitedServiceUuids;
-/// Create a copy of DeepskyDarwinScanSetting
-/// with the given fields replaced by the non-null parameter values.
-@JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-$DeepskyDarwinScanSettingCopyWith<DeepskyDarwinScanSetting> get copyWith => _$DeepskyDarwinScanSettingCopyWithImpl<DeepskyDarwinScanSetting>(this as DeepskyDarwinScanSetting, _$identity);
 
 
 
@@ -1669,37 +1212,7 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class $DeepskyDarwinScanSettingCopyWith<$Res>  {
-  factory $DeepskyDarwinScanSettingCopyWith(DeepskyDarwinScanSetting value, $Res Function(DeepskyDarwinScanSetting) _then) = _$DeepskyDarwinScanSettingCopyWithImpl;
-@useResult
-$Res call({
- bool allowDuplicates, List<DeepskyUuid> solicitedServiceUuids
-});
 
-
-
-
-}
-/// @nodoc
-class _$DeepskyDarwinScanSettingCopyWithImpl<$Res>
-    implements $DeepskyDarwinScanSettingCopyWith<$Res> {
-  _$DeepskyDarwinScanSettingCopyWithImpl(this._self, this._then);
-
-  final DeepskyDarwinScanSetting _self;
-  final $Res Function(DeepskyDarwinScanSetting) _then;
-
-/// Create a copy of DeepskyDarwinScanSetting
-/// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? allowDuplicates = null,Object? solicitedServiceUuids = null,}) {
-  return _then(_self.copyWith(
-allowDuplicates: null == allowDuplicates ? _self.allowDuplicates : allowDuplicates // ignore: cast_nullable_to_non_nullable
-as bool,solicitedServiceUuids: null == solicitedServiceUuids ? _self.solicitedServiceUuids : solicitedServiceUuids // ignore: cast_nullable_to_non_nullable
-as List<DeepskyUuid>,
-  ));
-}
-
-}
 
 
 /// Adds pattern-matching-related methods to [DeepskyDarwinScanSetting].
@@ -1848,11 +1361,6 @@ class _DeepskyDarwinScanSetting implements DeepskyDarwinScanSetting {
 }
 
 
-/// Create a copy of DeepskyDarwinScanSetting
-/// with the given fields replaced by the non-null parameter values.
-@override @JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-_$DeepskyDarwinScanSettingCopyWith<_DeepskyDarwinScanSetting> get copyWith => __$DeepskyDarwinScanSettingCopyWithImpl<_DeepskyDarwinScanSetting>(this, _$identity);
 
 
 
@@ -1873,48 +1381,13 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class _$DeepskyDarwinScanSettingCopyWith<$Res> implements $DeepskyDarwinScanSettingCopyWith<$Res> {
-  factory _$DeepskyDarwinScanSettingCopyWith(_DeepskyDarwinScanSetting value, $Res Function(_DeepskyDarwinScanSetting) _then) = __$DeepskyDarwinScanSettingCopyWithImpl;
-@override @useResult
-$Res call({
- bool allowDuplicates, List<DeepskyUuid> solicitedServiceUuids
-});
 
 
-
-
-}
-/// @nodoc
-class __$DeepskyDarwinScanSettingCopyWithImpl<$Res>
-    implements _$DeepskyDarwinScanSettingCopyWith<$Res> {
-  __$DeepskyDarwinScanSettingCopyWithImpl(this._self, this._then);
-
-  final _DeepskyDarwinScanSetting _self;
-  final $Res Function(_DeepskyDarwinScanSetting) _then;
-
-/// Create a copy of DeepskyDarwinScanSetting
-/// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? allowDuplicates = null,Object? solicitedServiceUuids = null,}) {
-  return _then(_DeepskyDarwinScanSetting(
-allowDuplicates: null == allowDuplicates ? _self.allowDuplicates : allowDuplicates // ignore: cast_nullable_to_non_nullable
-as bool,solicitedServiceUuids: null == solicitedServiceUuids ? _self._solicitedServiceUuids : solicitedServiceUuids // ignore: cast_nullable_to_non_nullable
-as List<DeepskyUuid>,
-  ));
-}
-
-
-}
 
 /// @nodoc
 mixin _$DeepskyScanOptions {
 
  DeepskyAndroidScanSetting get android; DeepskyDarwinScanSetting get darwin;
-/// Create a copy of DeepskyScanOptions
-/// with the given fields replaced by the non-null parameter values.
-@JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-$DeepskyScanOptionsCopyWith<DeepskyScanOptions> get copyWith => _$DeepskyScanOptionsCopyWithImpl<DeepskyScanOptions>(this as DeepskyScanOptions, _$identity);
 
 
 
@@ -1935,55 +1408,7 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class $DeepskyScanOptionsCopyWith<$Res>  {
-  factory $DeepskyScanOptionsCopyWith(DeepskyScanOptions value, $Res Function(DeepskyScanOptions) _then) = _$DeepskyScanOptionsCopyWithImpl;
-@useResult
-$Res call({
- DeepskyAndroidScanSetting android, DeepskyDarwinScanSetting darwin
-});
 
-
-$DeepskyAndroidScanSettingCopyWith<$Res> get android;$DeepskyDarwinScanSettingCopyWith<$Res> get darwin;
-
-}
-/// @nodoc
-class _$DeepskyScanOptionsCopyWithImpl<$Res>
-    implements $DeepskyScanOptionsCopyWith<$Res> {
-  _$DeepskyScanOptionsCopyWithImpl(this._self, this._then);
-
-  final DeepskyScanOptions _self;
-  final $Res Function(DeepskyScanOptions) _then;
-
-/// Create a copy of DeepskyScanOptions
-/// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? android = null,Object? darwin = null,}) {
-  return _then(_self.copyWith(
-android: null == android ? _self.android : android // ignore: cast_nullable_to_non_nullable
-as DeepskyAndroidScanSetting,darwin: null == darwin ? _self.darwin : darwin // ignore: cast_nullable_to_non_nullable
-as DeepskyDarwinScanSetting,
-  ));
-}
-/// Create a copy of DeepskyScanOptions
-/// with the given fields replaced by the non-null parameter values.
-@override
-@pragma('vm:prefer-inline')
-$DeepskyAndroidScanSettingCopyWith<$Res> get android {
-
-  return $DeepskyAndroidScanSettingCopyWith<$Res>(_self.android, (value) {
-    return _then(_self.copyWith(android: value));
-  });
-}/// Create a copy of DeepskyScanOptions
-/// with the given fields replaced by the non-null parameter values.
-@override
-@pragma('vm:prefer-inline')
-$DeepskyDarwinScanSettingCopyWith<$Res> get darwin {
-
-  return $DeepskyDarwinScanSettingCopyWith<$Res>(_self.darwin, (value) {
-    return _then(_self.copyWith(darwin: value));
-  });
-}
-}
 
 
 /// Adds pattern-matching-related methods to [DeepskyScanOptions].
@@ -2126,11 +1551,6 @@ class _DeepskyScanOptions implements DeepskyScanOptions {
 @override@JsonKey() final  DeepskyAndroidScanSetting android;
 @override@JsonKey() final  DeepskyDarwinScanSetting darwin;
 
-/// Create a copy of DeepskyScanOptions
-/// with the given fields replaced by the non-null parameter values.
-@override @JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-_$DeepskyScanOptionsCopyWith<_DeepskyScanOptions> get copyWith => __$DeepskyScanOptionsCopyWithImpl<_DeepskyScanOptions>(this, _$identity);
 
 
 
@@ -2151,66 +1571,13 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class _$DeepskyScanOptionsCopyWith<$Res> implements $DeepskyScanOptionsCopyWith<$Res> {
-  factory _$DeepskyScanOptionsCopyWith(_DeepskyScanOptions value, $Res Function(_DeepskyScanOptions) _then) = __$DeepskyScanOptionsCopyWithImpl;
-@override @useResult
-$Res call({
- DeepskyAndroidScanSetting android, DeepskyDarwinScanSetting darwin
-});
 
 
-@override $DeepskyAndroidScanSettingCopyWith<$Res> get android;@override $DeepskyDarwinScanSettingCopyWith<$Res> get darwin;
-
-}
-/// @nodoc
-class __$DeepskyScanOptionsCopyWithImpl<$Res>
-    implements _$DeepskyScanOptionsCopyWith<$Res> {
-  __$DeepskyScanOptionsCopyWithImpl(this._self, this._then);
-
-  final _DeepskyScanOptions _self;
-  final $Res Function(_DeepskyScanOptions) _then;
-
-/// Create a copy of DeepskyScanOptions
-/// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? android = null,Object? darwin = null,}) {
-  return _then(_DeepskyScanOptions(
-android: null == android ? _self.android : android // ignore: cast_nullable_to_non_nullable
-as DeepskyAndroidScanSetting,darwin: null == darwin ? _self.darwin : darwin // ignore: cast_nullable_to_non_nullable
-as DeepskyDarwinScanSetting,
-  ));
-}
-
-/// Create a copy of DeepskyScanOptions
-/// with the given fields replaced by the non-null parameter values.
-@override
-@pragma('vm:prefer-inline')
-$DeepskyAndroidScanSettingCopyWith<$Res> get android {
-
-  return $DeepskyAndroidScanSettingCopyWith<$Res>(_self.android, (value) {
-    return _then(_self.copyWith(android: value));
-  });
-}/// Create a copy of DeepskyScanOptions
-/// with the given fields replaced by the non-null parameter values.
-@override
-@pragma('vm:prefer-inline')
-$DeepskyDarwinScanSettingCopyWith<$Res> get darwin {
-
-  return $DeepskyDarwinScanSettingCopyWith<$Res>(_self.darwin, (value) {
-    return _then(_self.copyWith(darwin: value));
-  });
-}
-}
 
 /// @nodoc
 mixin _$BleScanResult {
 
  DeepskyDeviceId get deviceId; int get rssi; List<DeepskyUuid> get serviceUuids; String? get name; Uint8List? get manufacturerData; Uint8List? get raw;
-/// Create a copy of BleScanResult
-/// with the given fields replaced by the non-null parameter values.
-@JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-$BleScanResultCopyWith<BleScanResult> get copyWith => _$BleScanResultCopyWithImpl<BleScanResult>(this as BleScanResult, _$identity);
 
 
 
@@ -2231,50 +1598,7 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class $BleScanResultCopyWith<$Res>  {
-  factory $BleScanResultCopyWith(BleScanResult value, $Res Function(BleScanResult) _then) = _$BleScanResultCopyWithImpl;
-@useResult
-$Res call({
- DeepskyDeviceId deviceId, int rssi, List<DeepskyUuid> serviceUuids, String? name, Uint8List? manufacturerData, Uint8List? raw
-});
 
-
-$DeepskyDeviceIdCopyWith<$Res> get deviceId;
-
-}
-/// @nodoc
-class _$BleScanResultCopyWithImpl<$Res>
-    implements $BleScanResultCopyWith<$Res> {
-  _$BleScanResultCopyWithImpl(this._self, this._then);
-
-  final BleScanResult _self;
-  final $Res Function(BleScanResult) _then;
-
-/// Create a copy of BleScanResult
-/// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? deviceId = null,Object? rssi = null,Object? serviceUuids = null,Object? name = freezed,Object? manufacturerData = freezed,Object? raw = freezed,}) {
-  return _then(_self.copyWith(
-deviceId: null == deviceId ? _self.deviceId : deviceId // ignore: cast_nullable_to_non_nullable
-as DeepskyDeviceId,rssi: null == rssi ? _self.rssi : rssi // ignore: cast_nullable_to_non_nullable
-as int,serviceUuids: null == serviceUuids ? _self.serviceUuids : serviceUuids // ignore: cast_nullable_to_non_nullable
-as List<DeepskyUuid>,name: freezed == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
-as String?,manufacturerData: freezed == manufacturerData ? _self.manufacturerData : manufacturerData // ignore: cast_nullable_to_non_nullable
-as Uint8List?,raw: freezed == raw ? _self.raw : raw // ignore: cast_nullable_to_non_nullable
-as Uint8List?,
-  ));
-}
-/// Create a copy of BleScanResult
-/// with the given fields replaced by the non-null parameter values.
-@override
-@pragma('vm:prefer-inline')
-$DeepskyDeviceIdCopyWith<$Res> get deviceId {
-
-  return $DeepskyDeviceIdCopyWith<$Res>(_self.deviceId, (value) {
-    return _then(_self.copyWith(deviceId: value));
-  });
-}
-}
 
 
 /// Adds pattern-matching-related methods to [BleScanResult].
@@ -2427,11 +1751,6 @@ class _BleScanResult implements BleScanResult {
 @override final  Uint8List? manufacturerData;
 @override final  Uint8List? raw;
 
-/// Create a copy of BleScanResult
-/// with the given fields replaced by the non-null parameter values.
-@override @JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-_$BleScanResultCopyWith<_BleScanResult> get copyWith => __$BleScanResultCopyWithImpl<_BleScanResult>(this, _$identity);
 
 
 
@@ -2452,61 +1771,13 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class _$BleScanResultCopyWith<$Res> implements $BleScanResultCopyWith<$Res> {
-  factory _$BleScanResultCopyWith(_BleScanResult value, $Res Function(_BleScanResult) _then) = __$BleScanResultCopyWithImpl;
-@override @useResult
-$Res call({
- DeepskyDeviceId deviceId, int rssi, List<DeepskyUuid> serviceUuids, String? name, Uint8List? manufacturerData, Uint8List? raw
-});
 
 
-@override $DeepskyDeviceIdCopyWith<$Res> get deviceId;
-
-}
-/// @nodoc
-class __$BleScanResultCopyWithImpl<$Res>
-    implements _$BleScanResultCopyWith<$Res> {
-  __$BleScanResultCopyWithImpl(this._self, this._then);
-
-  final _BleScanResult _self;
-  final $Res Function(_BleScanResult) _then;
-
-/// Create a copy of BleScanResult
-/// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? deviceId = null,Object? rssi = null,Object? serviceUuids = null,Object? name = freezed,Object? manufacturerData = freezed,Object? raw = freezed,}) {
-  return _then(_BleScanResult(
-deviceId: null == deviceId ? _self.deviceId : deviceId // ignore: cast_nullable_to_non_nullable
-as DeepskyDeviceId,rssi: null == rssi ? _self.rssi : rssi // ignore: cast_nullable_to_non_nullable
-as int,serviceUuids: null == serviceUuids ? _self._serviceUuids : serviceUuids // ignore: cast_nullable_to_non_nullable
-as List<DeepskyUuid>,name: freezed == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
-as String?,manufacturerData: freezed == manufacturerData ? _self.manufacturerData : manufacturerData // ignore: cast_nullable_to_non_nullable
-as Uint8List?,raw: freezed == raw ? _self.raw : raw // ignore: cast_nullable_to_non_nullable
-as Uint8List?,
-  ));
-}
-
-/// Create a copy of BleScanResult
-/// with the given fields replaced by the non-null parameter values.
-@override
-@pragma('vm:prefer-inline')
-$DeepskyDeviceIdCopyWith<$Res> get deviceId {
-
-  return $DeepskyDeviceIdCopyWith<$Res>(_self.deviceId, (value) {
-    return _then(_self.copyWith(deviceId: value));
-  });
-}
-}
 
 /// @nodoc
 mixin _$BleCharacteristicProperties {
 
  bool get broadcast; bool get read; bool get writeWithoutResponse; bool get writeWithResponse; bool get notify; bool get indicate; bool get authenticatedSignedWrites; bool get extendedProperties;
-/// Create a copy of BleCharacteristicProperties
-/// with the given fields replaced by the non-null parameter values.
-@JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-$BleCharacteristicPropertiesCopyWith<BleCharacteristicProperties> get copyWith => _$BleCharacteristicPropertiesCopyWithImpl<BleCharacteristicProperties>(this as BleCharacteristicProperties, _$identity);
 
 
 
@@ -2527,43 +1798,7 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class $BleCharacteristicPropertiesCopyWith<$Res>  {
-  factory $BleCharacteristicPropertiesCopyWith(BleCharacteristicProperties value, $Res Function(BleCharacteristicProperties) _then) = _$BleCharacteristicPropertiesCopyWithImpl;
-@useResult
-$Res call({
- bool broadcast, bool read, bool writeWithoutResponse, bool writeWithResponse, bool notify, bool indicate, bool authenticatedSignedWrites, bool extendedProperties
-});
 
-
-
-
-}
-/// @nodoc
-class _$BleCharacteristicPropertiesCopyWithImpl<$Res>
-    implements $BleCharacteristicPropertiesCopyWith<$Res> {
-  _$BleCharacteristicPropertiesCopyWithImpl(this._self, this._then);
-
-  final BleCharacteristicProperties _self;
-  final $Res Function(BleCharacteristicProperties) _then;
-
-/// Create a copy of BleCharacteristicProperties
-/// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? broadcast = null,Object? read = null,Object? writeWithoutResponse = null,Object? writeWithResponse = null,Object? notify = null,Object? indicate = null,Object? authenticatedSignedWrites = null,Object? extendedProperties = null,}) {
-  return _then(_self.copyWith(
-broadcast: null == broadcast ? _self.broadcast : broadcast // ignore: cast_nullable_to_non_nullable
-as bool,read: null == read ? _self.read : read // ignore: cast_nullable_to_non_nullable
-as bool,writeWithoutResponse: null == writeWithoutResponse ? _self.writeWithoutResponse : writeWithoutResponse // ignore: cast_nullable_to_non_nullable
-as bool,writeWithResponse: null == writeWithResponse ? _self.writeWithResponse : writeWithResponse // ignore: cast_nullable_to_non_nullable
-as bool,notify: null == notify ? _self.notify : notify // ignore: cast_nullable_to_non_nullable
-as bool,indicate: null == indicate ? _self.indicate : indicate // ignore: cast_nullable_to_non_nullable
-as bool,authenticatedSignedWrites: null == authenticatedSignedWrites ? _self.authenticatedSignedWrites : authenticatedSignedWrites // ignore: cast_nullable_to_non_nullable
-as bool,extendedProperties: null == extendedProperties ? _self.extendedProperties : extendedProperties // ignore: cast_nullable_to_non_nullable
-as bool,
-  ));
-}
-
-}
 
 
 /// Adds pattern-matching-related methods to [BleCharacteristicProperties].
@@ -2712,11 +1947,6 @@ class _BleCharacteristicProperties implements BleCharacteristicProperties {
 @override@JsonKey() final  bool authenticatedSignedWrites;
 @override@JsonKey() final  bool extendedProperties;
 
-/// Create a copy of BleCharacteristicProperties
-/// with the given fields replaced by the non-null parameter values.
-@override @JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-_$BleCharacteristicPropertiesCopyWith<_BleCharacteristicProperties> get copyWith => __$BleCharacteristicPropertiesCopyWithImpl<_BleCharacteristicProperties>(this, _$identity);
 
 
 
@@ -2737,54 +1967,13 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class _$BleCharacteristicPropertiesCopyWith<$Res> implements $BleCharacteristicPropertiesCopyWith<$Res> {
-  factory _$BleCharacteristicPropertiesCopyWith(_BleCharacteristicProperties value, $Res Function(_BleCharacteristicProperties) _then) = __$BleCharacteristicPropertiesCopyWithImpl;
-@override @useResult
-$Res call({
- bool broadcast, bool read, bool writeWithoutResponse, bool writeWithResponse, bool notify, bool indicate, bool authenticatedSignedWrites, bool extendedProperties
-});
 
 
-
-
-}
-/// @nodoc
-class __$BleCharacteristicPropertiesCopyWithImpl<$Res>
-    implements _$BleCharacteristicPropertiesCopyWith<$Res> {
-  __$BleCharacteristicPropertiesCopyWithImpl(this._self, this._then);
-
-  final _BleCharacteristicProperties _self;
-  final $Res Function(_BleCharacteristicProperties) _then;
-
-/// Create a copy of BleCharacteristicProperties
-/// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? broadcast = null,Object? read = null,Object? writeWithoutResponse = null,Object? writeWithResponse = null,Object? notify = null,Object? indicate = null,Object? authenticatedSignedWrites = null,Object? extendedProperties = null,}) {
-  return _then(_BleCharacteristicProperties(
-broadcast: null == broadcast ? _self.broadcast : broadcast // ignore: cast_nullable_to_non_nullable
-as bool,read: null == read ? _self.read : read // ignore: cast_nullable_to_non_nullable
-as bool,writeWithoutResponse: null == writeWithoutResponse ? _self.writeWithoutResponse : writeWithoutResponse // ignore: cast_nullable_to_non_nullable
-as bool,writeWithResponse: null == writeWithResponse ? _self.writeWithResponse : writeWithResponse // ignore: cast_nullable_to_non_nullable
-as bool,notify: null == notify ? _self.notify : notify // ignore: cast_nullable_to_non_nullable
-as bool,indicate: null == indicate ? _self.indicate : indicate // ignore: cast_nullable_to_non_nullable
-as bool,authenticatedSignedWrites: null == authenticatedSignedWrites ? _self.authenticatedSignedWrites : authenticatedSignedWrites // ignore: cast_nullable_to_non_nullable
-as bool,extendedProperties: null == extendedProperties ? _self.extendedProperties : extendedProperties // ignore: cast_nullable_to_non_nullable
-as bool,
-  ));
-}
-
-
-}
 
 /// @nodoc
 mixin _$BleServiceInfo {
 
  int get handle; DeepskyUuid get uuid; List<BleCharacteristicInfo> get characteristics;
-/// Create a copy of BleServiceInfo
-/// with the given fields replaced by the non-null parameter values.
-@JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-$BleServiceInfoCopyWith<BleServiceInfo> get copyWith => _$BleServiceInfoCopyWithImpl<BleServiceInfo>(this as BleServiceInfo, _$identity);
 
 
 
@@ -2805,47 +1994,7 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class $BleServiceInfoCopyWith<$Res>  {
-  factory $BleServiceInfoCopyWith(BleServiceInfo value, $Res Function(BleServiceInfo) _then) = _$BleServiceInfoCopyWithImpl;
-@useResult
-$Res call({
- int handle, DeepskyUuid uuid, List<BleCharacteristicInfo> characteristics
-});
 
-
-$DeepskyUuidCopyWith<$Res> get uuid;
-
-}
-/// @nodoc
-class _$BleServiceInfoCopyWithImpl<$Res>
-    implements $BleServiceInfoCopyWith<$Res> {
-  _$BleServiceInfoCopyWithImpl(this._self, this._then);
-
-  final BleServiceInfo _self;
-  final $Res Function(BleServiceInfo) _then;
-
-/// Create a copy of BleServiceInfo
-/// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? handle = null,Object? uuid = null,Object? characteristics = null,}) {
-  return _then(_self.copyWith(
-handle: null == handle ? _self.handle : handle // ignore: cast_nullable_to_non_nullable
-as int,uuid: null == uuid ? _self.uuid : uuid // ignore: cast_nullable_to_non_nullable
-as DeepskyUuid,characteristics: null == characteristics ? _self.characteristics : characteristics // ignore: cast_nullable_to_non_nullable
-as List<BleCharacteristicInfo>,
-  ));
-}
-/// Create a copy of BleServiceInfo
-/// with the given fields replaced by the non-null parameter values.
-@override
-@pragma('vm:prefer-inline')
-$DeepskyUuidCopyWith<$Res> get uuid {
-
-  return $DeepskyUuidCopyWith<$Res>(_self.uuid, (value) {
-    return _then(_self.copyWith(uuid: value));
-  });
-}
-}
 
 
 /// Adds pattern-matching-related methods to [BleServiceInfo].
@@ -2995,11 +2144,6 @@ class _BleServiceInfo implements BleServiceInfo {
 }
 
 
-/// Create a copy of BleServiceInfo
-/// with the given fields replaced by the non-null parameter values.
-@override @JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-_$BleServiceInfoCopyWith<_BleServiceInfo> get copyWith => __$BleServiceInfoCopyWithImpl<_BleServiceInfo>(this, _$identity);
 
 
 
@@ -3020,58 +2164,13 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class _$BleServiceInfoCopyWith<$Res> implements $BleServiceInfoCopyWith<$Res> {
-  factory _$BleServiceInfoCopyWith(_BleServiceInfo value, $Res Function(_BleServiceInfo) _then) = __$BleServiceInfoCopyWithImpl;
-@override @useResult
-$Res call({
- int handle, DeepskyUuid uuid, List<BleCharacteristicInfo> characteristics
-});
 
 
-@override $DeepskyUuidCopyWith<$Res> get uuid;
-
-}
-/// @nodoc
-class __$BleServiceInfoCopyWithImpl<$Res>
-    implements _$BleServiceInfoCopyWith<$Res> {
-  __$BleServiceInfoCopyWithImpl(this._self, this._then);
-
-  final _BleServiceInfo _self;
-  final $Res Function(_BleServiceInfo) _then;
-
-/// Create a copy of BleServiceInfo
-/// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? handle = null,Object? uuid = null,Object? characteristics = null,}) {
-  return _then(_BleServiceInfo(
-handle: null == handle ? _self.handle : handle // ignore: cast_nullable_to_non_nullable
-as int,uuid: null == uuid ? _self.uuid : uuid // ignore: cast_nullable_to_non_nullable
-as DeepskyUuid,characteristics: null == characteristics ? _self._characteristics : characteristics // ignore: cast_nullable_to_non_nullable
-as List<BleCharacteristicInfo>,
-  ));
-}
-
-/// Create a copy of BleServiceInfo
-/// with the given fields replaced by the non-null parameter values.
-@override
-@pragma('vm:prefer-inline')
-$DeepskyUuidCopyWith<$Res> get uuid {
-
-  return $DeepskyUuidCopyWith<$Res>(_self.uuid, (value) {
-    return _then(_self.copyWith(uuid: value));
-  });
-}
-}
 
 /// @nodoc
 mixin _$BleCharacteristicInfo {
 
  int get handle; int get serviceHandle; DeepskyUuid get uuid; BleCharacteristicProperties get properties; List<BleDescriptorInfo> get descriptors;
-/// Create a copy of BleCharacteristicInfo
-/// with the given fields replaced by the non-null parameter values.
-@JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-$BleCharacteristicInfoCopyWith<BleCharacteristicInfo> get copyWith => _$BleCharacteristicInfoCopyWithImpl<BleCharacteristicInfo>(this as BleCharacteristicInfo, _$identity);
 
 
 
@@ -3092,58 +2191,7 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class $BleCharacteristicInfoCopyWith<$Res>  {
-  factory $BleCharacteristicInfoCopyWith(BleCharacteristicInfo value, $Res Function(BleCharacteristicInfo) _then) = _$BleCharacteristicInfoCopyWithImpl;
-@useResult
-$Res call({
- int handle, int serviceHandle, DeepskyUuid uuid, BleCharacteristicProperties properties, List<BleDescriptorInfo> descriptors
-});
 
-
-$DeepskyUuidCopyWith<$Res> get uuid;$BleCharacteristicPropertiesCopyWith<$Res> get properties;
-
-}
-/// @nodoc
-class _$BleCharacteristicInfoCopyWithImpl<$Res>
-    implements $BleCharacteristicInfoCopyWith<$Res> {
-  _$BleCharacteristicInfoCopyWithImpl(this._self, this._then);
-
-  final BleCharacteristicInfo _self;
-  final $Res Function(BleCharacteristicInfo) _then;
-
-/// Create a copy of BleCharacteristicInfo
-/// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? handle = null,Object? serviceHandle = null,Object? uuid = null,Object? properties = null,Object? descriptors = null,}) {
-  return _then(_self.copyWith(
-handle: null == handle ? _self.handle : handle // ignore: cast_nullable_to_non_nullable
-as int,serviceHandle: null == serviceHandle ? _self.serviceHandle : serviceHandle // ignore: cast_nullable_to_non_nullable
-as int,uuid: null == uuid ? _self.uuid : uuid // ignore: cast_nullable_to_non_nullable
-as DeepskyUuid,properties: null == properties ? _self.properties : properties // ignore: cast_nullable_to_non_nullable
-as BleCharacteristicProperties,descriptors: null == descriptors ? _self.descriptors : descriptors // ignore: cast_nullable_to_non_nullable
-as List<BleDescriptorInfo>,
-  ));
-}
-/// Create a copy of BleCharacteristicInfo
-/// with the given fields replaced by the non-null parameter values.
-@override
-@pragma('vm:prefer-inline')
-$DeepskyUuidCopyWith<$Res> get uuid {
-
-  return $DeepskyUuidCopyWith<$Res>(_self.uuid, (value) {
-    return _then(_self.copyWith(uuid: value));
-  });
-}/// Create a copy of BleCharacteristicInfo
-/// with the given fields replaced by the non-null parameter values.
-@override
-@pragma('vm:prefer-inline')
-$BleCharacteristicPropertiesCopyWith<$Res> get properties {
-
-  return $BleCharacteristicPropertiesCopyWith<$Res>(_self.properties, (value) {
-    return _then(_self.copyWith(properties: value));
-  });
-}
-}
 
 
 /// Adds pattern-matching-related methods to [BleCharacteristicInfo].
@@ -3295,11 +2343,6 @@ class _BleCharacteristicInfo implements BleCharacteristicInfo {
 }
 
 
-/// Create a copy of BleCharacteristicInfo
-/// with the given fields replaced by the non-null parameter values.
-@override @JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-_$BleCharacteristicInfoCopyWith<_BleCharacteristicInfo> get copyWith => __$BleCharacteristicInfoCopyWithImpl<_BleCharacteristicInfo>(this, _$identity);
 
 
 
@@ -3320,69 +2363,13 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class _$BleCharacteristicInfoCopyWith<$Res> implements $BleCharacteristicInfoCopyWith<$Res> {
-  factory _$BleCharacteristicInfoCopyWith(_BleCharacteristicInfo value, $Res Function(_BleCharacteristicInfo) _then) = __$BleCharacteristicInfoCopyWithImpl;
-@override @useResult
-$Res call({
- int handle, int serviceHandle, DeepskyUuid uuid, BleCharacteristicProperties properties, List<BleDescriptorInfo> descriptors
-});
 
 
-@override $DeepskyUuidCopyWith<$Res> get uuid;@override $BleCharacteristicPropertiesCopyWith<$Res> get properties;
-
-}
-/// @nodoc
-class __$BleCharacteristicInfoCopyWithImpl<$Res>
-    implements _$BleCharacteristicInfoCopyWith<$Res> {
-  __$BleCharacteristicInfoCopyWithImpl(this._self, this._then);
-
-  final _BleCharacteristicInfo _self;
-  final $Res Function(_BleCharacteristicInfo) _then;
-
-/// Create a copy of BleCharacteristicInfo
-/// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? handle = null,Object? serviceHandle = null,Object? uuid = null,Object? properties = null,Object? descriptors = null,}) {
-  return _then(_BleCharacteristicInfo(
-handle: null == handle ? _self.handle : handle // ignore: cast_nullable_to_non_nullable
-as int,serviceHandle: null == serviceHandle ? _self.serviceHandle : serviceHandle // ignore: cast_nullable_to_non_nullable
-as int,uuid: null == uuid ? _self.uuid : uuid // ignore: cast_nullable_to_non_nullable
-as DeepskyUuid,properties: null == properties ? _self.properties : properties // ignore: cast_nullable_to_non_nullable
-as BleCharacteristicProperties,descriptors: null == descriptors ? _self._descriptors : descriptors // ignore: cast_nullable_to_non_nullable
-as List<BleDescriptorInfo>,
-  ));
-}
-
-/// Create a copy of BleCharacteristicInfo
-/// with the given fields replaced by the non-null parameter values.
-@override
-@pragma('vm:prefer-inline')
-$DeepskyUuidCopyWith<$Res> get uuid {
-
-  return $DeepskyUuidCopyWith<$Res>(_self.uuid, (value) {
-    return _then(_self.copyWith(uuid: value));
-  });
-}/// Create a copy of BleCharacteristicInfo
-/// with the given fields replaced by the non-null parameter values.
-@override
-@pragma('vm:prefer-inline')
-$BleCharacteristicPropertiesCopyWith<$Res> get properties {
-
-  return $BleCharacteristicPropertiesCopyWith<$Res>(_self.properties, (value) {
-    return _then(_self.copyWith(properties: value));
-  });
-}
-}
 
 /// @nodoc
 mixin _$BleDescriptorInfo {
 
  int get handle; DeepskyUuid get uuid;
-/// Create a copy of BleDescriptorInfo
-/// with the given fields replaced by the non-null parameter values.
-@JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-$BleDescriptorInfoCopyWith<BleDescriptorInfo> get copyWith => _$BleDescriptorInfoCopyWithImpl<BleDescriptorInfo>(this as BleDescriptorInfo, _$identity);
 
 
 
@@ -3403,46 +2390,7 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class $BleDescriptorInfoCopyWith<$Res>  {
-  factory $BleDescriptorInfoCopyWith(BleDescriptorInfo value, $Res Function(BleDescriptorInfo) _then) = _$BleDescriptorInfoCopyWithImpl;
-@useResult
-$Res call({
- int handle, DeepskyUuid uuid
-});
 
-
-$DeepskyUuidCopyWith<$Res> get uuid;
-
-}
-/// @nodoc
-class _$BleDescriptorInfoCopyWithImpl<$Res>
-    implements $BleDescriptorInfoCopyWith<$Res> {
-  _$BleDescriptorInfoCopyWithImpl(this._self, this._then);
-
-  final BleDescriptorInfo _self;
-  final $Res Function(BleDescriptorInfo) _then;
-
-/// Create a copy of BleDescriptorInfo
-/// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? handle = null,Object? uuid = null,}) {
-  return _then(_self.copyWith(
-handle: null == handle ? _self.handle : handle // ignore: cast_nullable_to_non_nullable
-as int,uuid: null == uuid ? _self.uuid : uuid // ignore: cast_nullable_to_non_nullable
-as DeepskyUuid,
-  ));
-}
-/// Create a copy of BleDescriptorInfo
-/// with the given fields replaced by the non-null parameter values.
-@override
-@pragma('vm:prefer-inline')
-$DeepskyUuidCopyWith<$Res> get uuid {
-
-  return $DeepskyUuidCopyWith<$Res>(_self.uuid, (value) {
-    return _then(_self.copyWith(uuid: value));
-  });
-}
-}
 
 
 /// Adds pattern-matching-related methods to [BleDescriptorInfo].
@@ -3585,11 +2533,6 @@ class _BleDescriptorInfo implements BleDescriptorInfo {
 @override final  int handle;
 @override final  DeepskyUuid uuid;
 
-/// Create a copy of BleDescriptorInfo
-/// with the given fields replaced by the non-null parameter values.
-@override @JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-_$BleDescriptorInfoCopyWith<_BleDescriptorInfo> get copyWith => __$BleDescriptorInfoCopyWithImpl<_BleDescriptorInfo>(this, _$identity);
 
 
 
@@ -3610,57 +2553,13 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class _$BleDescriptorInfoCopyWith<$Res> implements $BleDescriptorInfoCopyWith<$Res> {
-  factory _$BleDescriptorInfoCopyWith(_BleDescriptorInfo value, $Res Function(_BleDescriptorInfo) _then) = __$BleDescriptorInfoCopyWithImpl;
-@override @useResult
-$Res call({
- int handle, DeepskyUuid uuid
-});
 
 
-@override $DeepskyUuidCopyWith<$Res> get uuid;
-
-}
-/// @nodoc
-class __$BleDescriptorInfoCopyWithImpl<$Res>
-    implements _$BleDescriptorInfoCopyWith<$Res> {
-  __$BleDescriptorInfoCopyWithImpl(this._self, this._then);
-
-  final _BleDescriptorInfo _self;
-  final $Res Function(_BleDescriptorInfo) _then;
-
-/// Create a copy of BleDescriptorInfo
-/// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? handle = null,Object? uuid = null,}) {
-  return _then(_BleDescriptorInfo(
-handle: null == handle ? _self.handle : handle // ignore: cast_nullable_to_non_nullable
-as int,uuid: null == uuid ? _self.uuid : uuid // ignore: cast_nullable_to_non_nullable
-as DeepskyUuid,
-  ));
-}
-
-/// Create a copy of BleDescriptorInfo
-/// with the given fields replaced by the non-null parameter values.
-@override
-@pragma('vm:prefer-inline')
-$DeepskyUuidCopyWith<$Res> get uuid {
-
-  return $DeepskyUuidCopyWith<$Res>(_self.uuid, (value) {
-    return _then(_self.copyWith(uuid: value));
-  });
-}
-}
 
 /// @nodoc
 mixin _$BleCharacteristicTarget {
 
  DeepskyDeviceId get deviceId; int get connectionEpoch; int get characteristicHandle;
-/// Create a copy of BleCharacteristicTarget
-/// with the given fields replaced by the non-null parameter values.
-@JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-$BleCharacteristicTargetCopyWith<BleCharacteristicTarget> get copyWith => _$BleCharacteristicTargetCopyWithImpl<BleCharacteristicTarget>(this as BleCharacteristicTarget, _$identity);
 
 
 
@@ -3681,47 +2580,7 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class $BleCharacteristicTargetCopyWith<$Res>  {
-  factory $BleCharacteristicTargetCopyWith(BleCharacteristicTarget value, $Res Function(BleCharacteristicTarget) _then) = _$BleCharacteristicTargetCopyWithImpl;
-@useResult
-$Res call({
- DeepskyDeviceId deviceId, int connectionEpoch, int characteristicHandle
-});
 
-
-$DeepskyDeviceIdCopyWith<$Res> get deviceId;
-
-}
-/// @nodoc
-class _$BleCharacteristicTargetCopyWithImpl<$Res>
-    implements $BleCharacteristicTargetCopyWith<$Res> {
-  _$BleCharacteristicTargetCopyWithImpl(this._self, this._then);
-
-  final BleCharacteristicTarget _self;
-  final $Res Function(BleCharacteristicTarget) _then;
-
-/// Create a copy of BleCharacteristicTarget
-/// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? deviceId = null,Object? connectionEpoch = null,Object? characteristicHandle = null,}) {
-  return _then(_self.copyWith(
-deviceId: null == deviceId ? _self.deviceId : deviceId // ignore: cast_nullable_to_non_nullable
-as DeepskyDeviceId,connectionEpoch: null == connectionEpoch ? _self.connectionEpoch : connectionEpoch // ignore: cast_nullable_to_non_nullable
-as int,characteristicHandle: null == characteristicHandle ? _self.characteristicHandle : characteristicHandle // ignore: cast_nullable_to_non_nullable
-as int,
-  ));
-}
-/// Create a copy of BleCharacteristicTarget
-/// with the given fields replaced by the non-null parameter values.
-@override
-@pragma('vm:prefer-inline')
-$DeepskyDeviceIdCopyWith<$Res> get deviceId {
-
-  return $DeepskyDeviceIdCopyWith<$Res>(_self.deviceId, (value) {
-    return _then(_self.copyWith(deviceId: value));
-  });
-}
-}
 
 
 /// Adds pattern-matching-related methods to [BleCharacteristicTarget].
@@ -3865,11 +2724,6 @@ class _BleCharacteristicTarget implements BleCharacteristicTarget {
 @override final  int connectionEpoch;
 @override final  int characteristicHandle;
 
-/// Create a copy of BleCharacteristicTarget
-/// with the given fields replaced by the non-null parameter values.
-@override @JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-_$BleCharacteristicTargetCopyWith<_BleCharacteristicTarget> get copyWith => __$BleCharacteristicTargetCopyWithImpl<_BleCharacteristicTarget>(this, _$identity);
 
 
 
@@ -3890,58 +2744,13 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class _$BleCharacteristicTargetCopyWith<$Res> implements $BleCharacteristicTargetCopyWith<$Res> {
-  factory _$BleCharacteristicTargetCopyWith(_BleCharacteristicTarget value, $Res Function(_BleCharacteristicTarget) _then) = __$BleCharacteristicTargetCopyWithImpl;
-@override @useResult
-$Res call({
- DeepskyDeviceId deviceId, int connectionEpoch, int characteristicHandle
-});
 
 
-@override $DeepskyDeviceIdCopyWith<$Res> get deviceId;
-
-}
-/// @nodoc
-class __$BleCharacteristicTargetCopyWithImpl<$Res>
-    implements _$BleCharacteristicTargetCopyWith<$Res> {
-  __$BleCharacteristicTargetCopyWithImpl(this._self, this._then);
-
-  final _BleCharacteristicTarget _self;
-  final $Res Function(_BleCharacteristicTarget) _then;
-
-/// Create a copy of BleCharacteristicTarget
-/// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? deviceId = null,Object? connectionEpoch = null,Object? characteristicHandle = null,}) {
-  return _then(_BleCharacteristicTarget(
-deviceId: null == deviceId ? _self.deviceId : deviceId // ignore: cast_nullable_to_non_nullable
-as DeepskyDeviceId,connectionEpoch: null == connectionEpoch ? _self.connectionEpoch : connectionEpoch // ignore: cast_nullable_to_non_nullable
-as int,characteristicHandle: null == characteristicHandle ? _self.characteristicHandle : characteristicHandle // ignore: cast_nullable_to_non_nullable
-as int,
-  ));
-}
-
-/// Create a copy of BleCharacteristicTarget
-/// with the given fields replaced by the non-null parameter values.
-@override
-@pragma('vm:prefer-inline')
-$DeepskyDeviceIdCopyWith<$Res> get deviceId {
-
-  return $DeepskyDeviceIdCopyWith<$Res>(_self.deviceId, (value) {
-    return _then(_self.copyWith(deviceId: value));
-  });
-}
-}
 
 /// @nodoc
 mixin _$BleDescriptorTarget {
 
  DeepskyDeviceId get deviceId; int get connectionEpoch; int get characteristicHandle; int get descriptorHandle;
-/// Create a copy of BleDescriptorTarget
-/// with the given fields replaced by the non-null parameter values.
-@JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-$BleDescriptorTargetCopyWith<BleDescriptorTarget> get copyWith => _$BleDescriptorTargetCopyWithImpl<BleDescriptorTarget>(this as BleDescriptorTarget, _$identity);
 
 
 
@@ -3962,48 +2771,7 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class $BleDescriptorTargetCopyWith<$Res>  {
-  factory $BleDescriptorTargetCopyWith(BleDescriptorTarget value, $Res Function(BleDescriptorTarget) _then) = _$BleDescriptorTargetCopyWithImpl;
-@useResult
-$Res call({
- DeepskyDeviceId deviceId, int connectionEpoch, int characteristicHandle, int descriptorHandle
-});
 
-
-$DeepskyDeviceIdCopyWith<$Res> get deviceId;
-
-}
-/// @nodoc
-class _$BleDescriptorTargetCopyWithImpl<$Res>
-    implements $BleDescriptorTargetCopyWith<$Res> {
-  _$BleDescriptorTargetCopyWithImpl(this._self, this._then);
-
-  final BleDescriptorTarget _self;
-  final $Res Function(BleDescriptorTarget) _then;
-
-/// Create a copy of BleDescriptorTarget
-/// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? deviceId = null,Object? connectionEpoch = null,Object? characteristicHandle = null,Object? descriptorHandle = null,}) {
-  return _then(_self.copyWith(
-deviceId: null == deviceId ? _self.deviceId : deviceId // ignore: cast_nullable_to_non_nullable
-as DeepskyDeviceId,connectionEpoch: null == connectionEpoch ? _self.connectionEpoch : connectionEpoch // ignore: cast_nullable_to_non_nullable
-as int,characteristicHandle: null == characteristicHandle ? _self.characteristicHandle : characteristicHandle // ignore: cast_nullable_to_non_nullable
-as int,descriptorHandle: null == descriptorHandle ? _self.descriptorHandle : descriptorHandle // ignore: cast_nullable_to_non_nullable
-as int,
-  ));
-}
-/// Create a copy of BleDescriptorTarget
-/// with the given fields replaced by the non-null parameter values.
-@override
-@pragma('vm:prefer-inline')
-$DeepskyDeviceIdCopyWith<$Res> get deviceId {
-
-  return $DeepskyDeviceIdCopyWith<$Res>(_self.deviceId, (value) {
-    return _then(_self.copyWith(deviceId: value));
-  });
-}
-}
 
 
 /// Adds pattern-matching-related methods to [BleDescriptorTarget].
@@ -4148,11 +2916,6 @@ class _BleDescriptorTarget implements BleDescriptorTarget {
 @override final  int characteristicHandle;
 @override final  int descriptorHandle;
 
-/// Create a copy of BleDescriptorTarget
-/// with the given fields replaced by the non-null parameter values.
-@override @JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-_$BleDescriptorTargetCopyWith<_BleDescriptorTarget> get copyWith => __$BleDescriptorTargetCopyWithImpl<_BleDescriptorTarget>(this, _$identity);
 
 
 
@@ -4173,59 +2936,13 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class _$BleDescriptorTargetCopyWith<$Res> implements $BleDescriptorTargetCopyWith<$Res> {
-  factory _$BleDescriptorTargetCopyWith(_BleDescriptorTarget value, $Res Function(_BleDescriptorTarget) _then) = __$BleDescriptorTargetCopyWithImpl;
-@override @useResult
-$Res call({
- DeepskyDeviceId deviceId, int connectionEpoch, int characteristicHandle, int descriptorHandle
-});
 
 
-@override $DeepskyDeviceIdCopyWith<$Res> get deviceId;
-
-}
-/// @nodoc
-class __$BleDescriptorTargetCopyWithImpl<$Res>
-    implements _$BleDescriptorTargetCopyWith<$Res> {
-  __$BleDescriptorTargetCopyWithImpl(this._self, this._then);
-
-  final _BleDescriptorTarget _self;
-  final $Res Function(_BleDescriptorTarget) _then;
-
-/// Create a copy of BleDescriptorTarget
-/// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? deviceId = null,Object? connectionEpoch = null,Object? characteristicHandle = null,Object? descriptorHandle = null,}) {
-  return _then(_BleDescriptorTarget(
-deviceId: null == deviceId ? _self.deviceId : deviceId // ignore: cast_nullable_to_non_nullable
-as DeepskyDeviceId,connectionEpoch: null == connectionEpoch ? _self.connectionEpoch : connectionEpoch // ignore: cast_nullable_to_non_nullable
-as int,characteristicHandle: null == characteristicHandle ? _self.characteristicHandle : characteristicHandle // ignore: cast_nullable_to_non_nullable
-as int,descriptorHandle: null == descriptorHandle ? _self.descriptorHandle : descriptorHandle // ignore: cast_nullable_to_non_nullable
-as int,
-  ));
-}
-
-/// Create a copy of BleDescriptorTarget
-/// with the given fields replaced by the non-null parameter values.
-@override
-@pragma('vm:prefer-inline')
-$DeepskyDeviceIdCopyWith<$Res> get deviceId {
-
-  return $DeepskyDeviceIdCopyWith<$Res>(_self.deviceId, (value) {
-    return _then(_self.copyWith(deviceId: value));
-  });
-}
-}
 
 /// @nodoc
 mixin _$ConnectionAttempt {
 
  int get connectionEpoch;
-/// Create a copy of ConnectionAttempt
-/// with the given fields replaced by the non-null parameter values.
-@JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-$ConnectionAttemptCopyWith<ConnectionAttempt> get copyWith => _$ConnectionAttemptCopyWithImpl<ConnectionAttempt>(this as ConnectionAttempt, _$identity);
 
 
 
@@ -4246,36 +2963,7 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class $ConnectionAttemptCopyWith<$Res>  {
-  factory $ConnectionAttemptCopyWith(ConnectionAttempt value, $Res Function(ConnectionAttempt) _then) = _$ConnectionAttemptCopyWithImpl;
-@useResult
-$Res call({
- int connectionEpoch
-});
 
-
-
-
-}
-/// @nodoc
-class _$ConnectionAttemptCopyWithImpl<$Res>
-    implements $ConnectionAttemptCopyWith<$Res> {
-  _$ConnectionAttemptCopyWithImpl(this._self, this._then);
-
-  final ConnectionAttempt _self;
-  final $Res Function(ConnectionAttempt) _then;
-
-/// Create a copy of ConnectionAttempt
-/// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? connectionEpoch = null,}) {
-  return _then(_self.copyWith(
-connectionEpoch: null == connectionEpoch ? _self.connectionEpoch : connectionEpoch // ignore: cast_nullable_to_non_nullable
-as int,
-  ));
-}
-
-}
 
 
 /// Adds pattern-matching-related methods to [ConnectionAttempt].
@@ -4417,11 +3105,6 @@ class _ConnectionAttempt implements ConnectionAttempt {
 
 @override final  int connectionEpoch;
 
-/// Create a copy of ConnectionAttempt
-/// with the given fields replaced by the non-null parameter values.
-@override @JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-_$ConnectionAttemptCopyWith<_ConnectionAttempt> get copyWith => __$ConnectionAttemptCopyWithImpl<_ConnectionAttempt>(this, _$identity);
 
 
 
@@ -4442,47 +3125,13 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class _$ConnectionAttemptCopyWith<$Res> implements $ConnectionAttemptCopyWith<$Res> {
-  factory _$ConnectionAttemptCopyWith(_ConnectionAttempt value, $Res Function(_ConnectionAttempt) _then) = __$ConnectionAttemptCopyWithImpl;
-@override @useResult
-$Res call({
- int connectionEpoch
-});
 
 
-
-
-}
-/// @nodoc
-class __$ConnectionAttemptCopyWithImpl<$Res>
-    implements _$ConnectionAttemptCopyWith<$Res> {
-  __$ConnectionAttemptCopyWithImpl(this._self, this._then);
-
-  final _ConnectionAttempt _self;
-  final $Res Function(_ConnectionAttempt) _then;
-
-/// Create a copy of ConnectionAttempt
-/// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? connectionEpoch = null,}) {
-  return _then(_ConnectionAttempt(
-connectionEpoch: null == connectionEpoch ? _self.connectionEpoch : connectionEpoch // ignore: cast_nullable_to_non_nullable
-as int,
-  ));
-}
-
-
-}
 
 /// @nodoc
 mixin _$BlePlatformConnectionEvent {
 
  DeepskyDeviceId get deviceId; int? get connectionEpoch; BleConnectionState get state; BleDisconnectReason? get reason;
-/// Create a copy of BlePlatformConnectionEvent
-/// with the given fields replaced by the non-null parameter values.
-@JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-$BlePlatformConnectionEventCopyWith<BlePlatformConnectionEvent> get copyWith => _$BlePlatformConnectionEventCopyWithImpl<BlePlatformConnectionEvent>(this as BlePlatformConnectionEvent, _$identity);
 
 
 
@@ -4503,48 +3152,7 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class $BlePlatformConnectionEventCopyWith<$Res>  {
-  factory $BlePlatformConnectionEventCopyWith(BlePlatformConnectionEvent value, $Res Function(BlePlatformConnectionEvent) _then) = _$BlePlatformConnectionEventCopyWithImpl;
-@useResult
-$Res call({
- DeepskyDeviceId deviceId, int? connectionEpoch, BleConnectionState state, BleDisconnectReason? reason
-});
 
-
-$DeepskyDeviceIdCopyWith<$Res> get deviceId;
-
-}
-/// @nodoc
-class _$BlePlatformConnectionEventCopyWithImpl<$Res>
-    implements $BlePlatformConnectionEventCopyWith<$Res> {
-  _$BlePlatformConnectionEventCopyWithImpl(this._self, this._then);
-
-  final BlePlatformConnectionEvent _self;
-  final $Res Function(BlePlatformConnectionEvent) _then;
-
-/// Create a copy of BlePlatformConnectionEvent
-/// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? deviceId = null,Object? connectionEpoch = freezed,Object? state = null,Object? reason = freezed,}) {
-  return _then(_self.copyWith(
-deviceId: null == deviceId ? _self.deviceId : deviceId // ignore: cast_nullable_to_non_nullable
-as DeepskyDeviceId,connectionEpoch: freezed == connectionEpoch ? _self.connectionEpoch : connectionEpoch // ignore: cast_nullable_to_non_nullable
-as int?,state: null == state ? _self.state : state // ignore: cast_nullable_to_non_nullable
-as BleConnectionState,reason: freezed == reason ? _self.reason : reason // ignore: cast_nullable_to_non_nullable
-as BleDisconnectReason?,
-  ));
-}
-/// Create a copy of BlePlatformConnectionEvent
-/// with the given fields replaced by the non-null parameter values.
-@override
-@pragma('vm:prefer-inline')
-$DeepskyDeviceIdCopyWith<$Res> get deviceId {
-
-  return $DeepskyDeviceIdCopyWith<$Res>(_self.deviceId, (value) {
-    return _then(_self.copyWith(deviceId: value));
-  });
-}
-}
 
 
 /// Adds pattern-matching-related methods to [BlePlatformConnectionEvent].
@@ -4689,11 +3297,6 @@ class _BlePlatformConnectionEvent implements BlePlatformConnectionEvent {
 @override final  BleConnectionState state;
 @override final  BleDisconnectReason? reason;
 
-/// Create a copy of BlePlatformConnectionEvent
-/// with the given fields replaced by the non-null parameter values.
-@override @JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-_$BlePlatformConnectionEventCopyWith<_BlePlatformConnectionEvent> get copyWith => __$BlePlatformConnectionEventCopyWithImpl<_BlePlatformConnectionEvent>(this, _$identity);
 
 
 
@@ -4714,59 +3317,13 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class _$BlePlatformConnectionEventCopyWith<$Res> implements $BlePlatformConnectionEventCopyWith<$Res> {
-  factory _$BlePlatformConnectionEventCopyWith(_BlePlatformConnectionEvent value, $Res Function(_BlePlatformConnectionEvent) _then) = __$BlePlatformConnectionEventCopyWithImpl;
-@override @useResult
-$Res call({
- DeepskyDeviceId deviceId, int? connectionEpoch, BleConnectionState state, BleDisconnectReason? reason
-});
 
 
-@override $DeepskyDeviceIdCopyWith<$Res> get deviceId;
-
-}
-/// @nodoc
-class __$BlePlatformConnectionEventCopyWithImpl<$Res>
-    implements _$BlePlatformConnectionEventCopyWith<$Res> {
-  __$BlePlatformConnectionEventCopyWithImpl(this._self, this._then);
-
-  final _BlePlatformConnectionEvent _self;
-  final $Res Function(_BlePlatformConnectionEvent) _then;
-
-/// Create a copy of BlePlatformConnectionEvent
-/// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? deviceId = null,Object? connectionEpoch = freezed,Object? state = null,Object? reason = freezed,}) {
-  return _then(_BlePlatformConnectionEvent(
-deviceId: null == deviceId ? _self.deviceId : deviceId // ignore: cast_nullable_to_non_nullable
-as DeepskyDeviceId,connectionEpoch: freezed == connectionEpoch ? _self.connectionEpoch : connectionEpoch // ignore: cast_nullable_to_non_nullable
-as int?,state: null == state ? _self.state : state // ignore: cast_nullable_to_non_nullable
-as BleConnectionState,reason: freezed == reason ? _self.reason : reason // ignore: cast_nullable_to_non_nullable
-as BleDisconnectReason?,
-  ));
-}
-
-/// Create a copy of BlePlatformConnectionEvent
-/// with the given fields replaced by the non-null parameter values.
-@override
-@pragma('vm:prefer-inline')
-$DeepskyDeviceIdCopyWith<$Res> get deviceId {
-
-  return $DeepskyDeviceIdCopyWith<$Res>(_self.deviceId, (value) {
-    return _then(_self.copyWith(deviceId: value));
-  });
-}
-}
 
 /// @nodoc
 mixin _$BleNotifyEvent {
 
  DeepskyDeviceId get deviceId; int get connectionEpoch; int get characteristicHandle; Uint8List get value;
-/// Create a copy of BleNotifyEvent
-/// with the given fields replaced by the non-null parameter values.
-@JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-$BleNotifyEventCopyWith<BleNotifyEvent> get copyWith => _$BleNotifyEventCopyWithImpl<BleNotifyEvent>(this as BleNotifyEvent, _$identity);
 
 
 
@@ -4787,48 +3344,7 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class $BleNotifyEventCopyWith<$Res>  {
-  factory $BleNotifyEventCopyWith(BleNotifyEvent value, $Res Function(BleNotifyEvent) _then) = _$BleNotifyEventCopyWithImpl;
-@useResult
-$Res call({
- DeepskyDeviceId deviceId, int connectionEpoch, int characteristicHandle, Uint8List value
-});
 
-
-$DeepskyDeviceIdCopyWith<$Res> get deviceId;
-
-}
-/// @nodoc
-class _$BleNotifyEventCopyWithImpl<$Res>
-    implements $BleNotifyEventCopyWith<$Res> {
-  _$BleNotifyEventCopyWithImpl(this._self, this._then);
-
-  final BleNotifyEvent _self;
-  final $Res Function(BleNotifyEvent) _then;
-
-/// Create a copy of BleNotifyEvent
-/// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? deviceId = null,Object? connectionEpoch = null,Object? characteristicHandle = null,Object? value = null,}) {
-  return _then(_self.copyWith(
-deviceId: null == deviceId ? _self.deviceId : deviceId // ignore: cast_nullable_to_non_nullable
-as DeepskyDeviceId,connectionEpoch: null == connectionEpoch ? _self.connectionEpoch : connectionEpoch // ignore: cast_nullable_to_non_nullable
-as int,characteristicHandle: null == characteristicHandle ? _self.characteristicHandle : characteristicHandle // ignore: cast_nullable_to_non_nullable
-as int,value: null == value ? _self.value : value // ignore: cast_nullable_to_non_nullable
-as Uint8List,
-  ));
-}
-/// Create a copy of BleNotifyEvent
-/// with the given fields replaced by the non-null parameter values.
-@override
-@pragma('vm:prefer-inline')
-$DeepskyDeviceIdCopyWith<$Res> get deviceId {
-
-  return $DeepskyDeviceIdCopyWith<$Res>(_self.deviceId, (value) {
-    return _then(_self.copyWith(deviceId: value));
-  });
-}
-}
 
 
 /// Adds pattern-matching-related methods to [BleNotifyEvent].
@@ -4973,11 +3489,6 @@ class _BleNotifyEvent implements BleNotifyEvent {
 @override final  int characteristicHandle;
 @override final  Uint8List value;
 
-/// Create a copy of BleNotifyEvent
-/// with the given fields replaced by the non-null parameter values.
-@override @JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-_$BleNotifyEventCopyWith<_BleNotifyEvent> get copyWith => __$BleNotifyEventCopyWithImpl<_BleNotifyEvent>(this, _$identity);
 
 
 
@@ -4998,59 +3509,13 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class _$BleNotifyEventCopyWith<$Res> implements $BleNotifyEventCopyWith<$Res> {
-  factory _$BleNotifyEventCopyWith(_BleNotifyEvent value, $Res Function(_BleNotifyEvent) _then) = __$BleNotifyEventCopyWithImpl;
-@override @useResult
-$Res call({
- DeepskyDeviceId deviceId, int connectionEpoch, int characteristicHandle, Uint8List value
-});
 
 
-@override $DeepskyDeviceIdCopyWith<$Res> get deviceId;
-
-}
-/// @nodoc
-class __$BleNotifyEventCopyWithImpl<$Res>
-    implements _$BleNotifyEventCopyWith<$Res> {
-  __$BleNotifyEventCopyWithImpl(this._self, this._then);
-
-  final _BleNotifyEvent _self;
-  final $Res Function(_BleNotifyEvent) _then;
-
-/// Create a copy of BleNotifyEvent
-/// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? deviceId = null,Object? connectionEpoch = null,Object? characteristicHandle = null,Object? value = null,}) {
-  return _then(_BleNotifyEvent(
-deviceId: null == deviceId ? _self.deviceId : deviceId // ignore: cast_nullable_to_non_nullable
-as DeepskyDeviceId,connectionEpoch: null == connectionEpoch ? _self.connectionEpoch : connectionEpoch // ignore: cast_nullable_to_non_nullable
-as int,characteristicHandle: null == characteristicHandle ? _self.characteristicHandle : characteristicHandle // ignore: cast_nullable_to_non_nullable
-as int,value: null == value ? _self.value : value // ignore: cast_nullable_to_non_nullable
-as Uint8List,
-  ));
-}
-
-/// Create a copy of BleNotifyEvent
-/// with the given fields replaced by the non-null parameter values.
-@override
-@pragma('vm:prefer-inline')
-$DeepskyDeviceIdCopyWith<$Res> get deviceId {
-
-  return $DeepskyDeviceIdCopyWith<$Res>(_self.deviceId, (value) {
-    return _then(_self.copyWith(deviceId: value));
-  });
-}
-}
 
 /// @nodoc
 mixin _$BleOperationTimeout {
 
  DeepskyDeviceId get deviceId; int get connectionEpoch;
-/// Create a copy of BleOperationTimeout
-/// with the given fields replaced by the non-null parameter values.
-@JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-$BleOperationTimeoutCopyWith<BleOperationTimeout> get copyWith => _$BleOperationTimeoutCopyWithImpl<BleOperationTimeout>(this as BleOperationTimeout, _$identity);
 
 
 
@@ -5071,46 +3536,7 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class $BleOperationTimeoutCopyWith<$Res>  {
-  factory $BleOperationTimeoutCopyWith(BleOperationTimeout value, $Res Function(BleOperationTimeout) _then) = _$BleOperationTimeoutCopyWithImpl;
-@useResult
-$Res call({
- DeepskyDeviceId deviceId, int connectionEpoch
-});
 
-
-$DeepskyDeviceIdCopyWith<$Res> get deviceId;
-
-}
-/// @nodoc
-class _$BleOperationTimeoutCopyWithImpl<$Res>
-    implements $BleOperationTimeoutCopyWith<$Res> {
-  _$BleOperationTimeoutCopyWithImpl(this._self, this._then);
-
-  final BleOperationTimeout _self;
-  final $Res Function(BleOperationTimeout) _then;
-
-/// Create a copy of BleOperationTimeout
-/// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? deviceId = null,Object? connectionEpoch = null,}) {
-  return _then(_self.copyWith(
-deviceId: null == deviceId ? _self.deviceId : deviceId // ignore: cast_nullable_to_non_nullable
-as DeepskyDeviceId,connectionEpoch: null == connectionEpoch ? _self.connectionEpoch : connectionEpoch // ignore: cast_nullable_to_non_nullable
-as int,
-  ));
-}
-/// Create a copy of BleOperationTimeout
-/// with the given fields replaced by the non-null parameter values.
-@override
-@pragma('vm:prefer-inline')
-$DeepskyDeviceIdCopyWith<$Res> get deviceId {
-
-  return $DeepskyDeviceIdCopyWith<$Res>(_self.deviceId, (value) {
-    return _then(_self.copyWith(deviceId: value));
-  });
-}
-}
 
 
 /// Adds pattern-matching-related methods to [BleOperationTimeout].
@@ -5253,11 +3679,6 @@ class _BleOperationTimeout implements BleOperationTimeout {
 @override final  DeepskyDeviceId deviceId;
 @override final  int connectionEpoch;
 
-/// Create a copy of BleOperationTimeout
-/// with the given fields replaced by the non-null parameter values.
-@override @JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-_$BleOperationTimeoutCopyWith<_BleOperationTimeout> get copyWith => __$BleOperationTimeoutCopyWithImpl<_BleOperationTimeout>(this, _$identity);
 
 
 
@@ -5278,57 +3699,13 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class _$BleOperationTimeoutCopyWith<$Res> implements $BleOperationTimeoutCopyWith<$Res> {
-  factory _$BleOperationTimeoutCopyWith(_BleOperationTimeout value, $Res Function(_BleOperationTimeout) _then) = __$BleOperationTimeoutCopyWithImpl;
-@override @useResult
-$Res call({
- DeepskyDeviceId deviceId, int connectionEpoch
-});
 
 
-@override $DeepskyDeviceIdCopyWith<$Res> get deviceId;
-
-}
-/// @nodoc
-class __$BleOperationTimeoutCopyWithImpl<$Res>
-    implements _$BleOperationTimeoutCopyWith<$Res> {
-  __$BleOperationTimeoutCopyWithImpl(this._self, this._then);
-
-  final _BleOperationTimeout _self;
-  final $Res Function(_BleOperationTimeout) _then;
-
-/// Create a copy of BleOperationTimeout
-/// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? deviceId = null,Object? connectionEpoch = null,}) {
-  return _then(_BleOperationTimeout(
-deviceId: null == deviceId ? _self.deviceId : deviceId // ignore: cast_nullable_to_non_nullable
-as DeepskyDeviceId,connectionEpoch: null == connectionEpoch ? _self.connectionEpoch : connectionEpoch // ignore: cast_nullable_to_non_nullable
-as int,
-  ));
-}
-
-/// Create a copy of BleOperationTimeout
-/// with the given fields replaced by the non-null parameter values.
-@override
-@pragma('vm:prefer-inline')
-$DeepskyDeviceIdCopyWith<$Res> get deviceId {
-
-  return $DeepskyDeviceIdCopyWith<$Res>(_self.deviceId, (value) {
-    return _then(_self.copyWith(deviceId: value));
-  });
-}
-}
 
 /// @nodoc
 mixin _$BleCompanionEvent {
 
  DeepskyDeviceId get deviceId; bool get appeared;
-/// Create a copy of BleCompanionEvent
-/// with the given fields replaced by the non-null parameter values.
-@JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-$BleCompanionEventCopyWith<BleCompanionEvent> get copyWith => _$BleCompanionEventCopyWithImpl<BleCompanionEvent>(this as BleCompanionEvent, _$identity);
 
 
 
@@ -5349,46 +3726,7 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class $BleCompanionEventCopyWith<$Res>  {
-  factory $BleCompanionEventCopyWith(BleCompanionEvent value, $Res Function(BleCompanionEvent) _then) = _$BleCompanionEventCopyWithImpl;
-@useResult
-$Res call({
- DeepskyDeviceId deviceId, bool appeared
-});
 
-
-$DeepskyDeviceIdCopyWith<$Res> get deviceId;
-
-}
-/// @nodoc
-class _$BleCompanionEventCopyWithImpl<$Res>
-    implements $BleCompanionEventCopyWith<$Res> {
-  _$BleCompanionEventCopyWithImpl(this._self, this._then);
-
-  final BleCompanionEvent _self;
-  final $Res Function(BleCompanionEvent) _then;
-
-/// Create a copy of BleCompanionEvent
-/// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? deviceId = null,Object? appeared = null,}) {
-  return _then(_self.copyWith(
-deviceId: null == deviceId ? _self.deviceId : deviceId // ignore: cast_nullable_to_non_nullable
-as DeepskyDeviceId,appeared: null == appeared ? _self.appeared : appeared // ignore: cast_nullable_to_non_nullable
-as bool,
-  ));
-}
-/// Create a copy of BleCompanionEvent
-/// with the given fields replaced by the non-null parameter values.
-@override
-@pragma('vm:prefer-inline')
-$DeepskyDeviceIdCopyWith<$Res> get deviceId {
-
-  return $DeepskyDeviceIdCopyWith<$Res>(_self.deviceId, (value) {
-    return _then(_self.copyWith(deviceId: value));
-  });
-}
-}
 
 
 /// Adds pattern-matching-related methods to [BleCompanionEvent].
@@ -5531,11 +3869,6 @@ class _BleCompanionEvent implements BleCompanionEvent {
 @override final  DeepskyDeviceId deviceId;
 @override final  bool appeared;
 
-/// Create a copy of BleCompanionEvent
-/// with the given fields replaced by the non-null parameter values.
-@override @JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-_$BleCompanionEventCopyWith<_BleCompanionEvent> get copyWith => __$BleCompanionEventCopyWithImpl<_BleCompanionEvent>(this, _$identity);
 
 
 
@@ -5556,57 +3889,13 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class _$BleCompanionEventCopyWith<$Res> implements $BleCompanionEventCopyWith<$Res> {
-  factory _$BleCompanionEventCopyWith(_BleCompanionEvent value, $Res Function(_BleCompanionEvent) _then) = __$BleCompanionEventCopyWithImpl;
-@override @useResult
-$Res call({
- DeepskyDeviceId deviceId, bool appeared
-});
 
 
-@override $DeepskyDeviceIdCopyWith<$Res> get deviceId;
-
-}
-/// @nodoc
-class __$BleCompanionEventCopyWithImpl<$Res>
-    implements _$BleCompanionEventCopyWith<$Res> {
-  __$BleCompanionEventCopyWithImpl(this._self, this._then);
-
-  final _BleCompanionEvent _self;
-  final $Res Function(_BleCompanionEvent) _then;
-
-/// Create a copy of BleCompanionEvent
-/// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? deviceId = null,Object? appeared = null,}) {
-  return _then(_BleCompanionEvent(
-deviceId: null == deviceId ? _self.deviceId : deviceId // ignore: cast_nullable_to_non_nullable
-as DeepskyDeviceId,appeared: null == appeared ? _self.appeared : appeared // ignore: cast_nullable_to_non_nullable
-as bool,
-  ));
-}
-
-/// Create a copy of BleCompanionEvent
-/// with the given fields replaced by the non-null parameter values.
-@override
-@pragma('vm:prefer-inline')
-$DeepskyDeviceIdCopyWith<$Res> get deviceId {
-
-  return $DeepskyDeviceIdCopyWith<$Res>(_self.deviceId, (value) {
-    return _then(_self.copyWith(deviceId: value));
-  });
-}
-}
 
 /// @nodoc
 mixin _$BleStateSnapshot {
 
  DeepskyDeviceId get deviceId; int get connectionEpoch; BleConnectionState get state; BleDisconnectReason? get disconnectReason; List<int> get activeNotifyHandles; List<BleServiceInfo>? get services; bool get restored;
-/// Create a copy of BleStateSnapshot
-/// with the given fields replaced by the non-null parameter values.
-@JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-$BleStateSnapshotCopyWith<BleStateSnapshot> get copyWith => _$BleStateSnapshotCopyWithImpl<BleStateSnapshot>(this as BleStateSnapshot, _$identity);
 
 
 
@@ -5627,51 +3916,7 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class $BleStateSnapshotCopyWith<$Res>  {
-  factory $BleStateSnapshotCopyWith(BleStateSnapshot value, $Res Function(BleStateSnapshot) _then) = _$BleStateSnapshotCopyWithImpl;
-@useResult
-$Res call({
- DeepskyDeviceId deviceId, int connectionEpoch, BleConnectionState state, BleDisconnectReason? disconnectReason, List<int> activeNotifyHandles, List<BleServiceInfo>? services, bool restored
-});
 
-
-$DeepskyDeviceIdCopyWith<$Res> get deviceId;
-
-}
-/// @nodoc
-class _$BleStateSnapshotCopyWithImpl<$Res>
-    implements $BleStateSnapshotCopyWith<$Res> {
-  _$BleStateSnapshotCopyWithImpl(this._self, this._then);
-
-  final BleStateSnapshot _self;
-  final $Res Function(BleStateSnapshot) _then;
-
-/// Create a copy of BleStateSnapshot
-/// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? deviceId = null,Object? connectionEpoch = null,Object? state = null,Object? disconnectReason = freezed,Object? activeNotifyHandles = null,Object? services = freezed,Object? restored = null,}) {
-  return _then(_self.copyWith(
-deviceId: null == deviceId ? _self.deviceId : deviceId // ignore: cast_nullable_to_non_nullable
-as DeepskyDeviceId,connectionEpoch: null == connectionEpoch ? _self.connectionEpoch : connectionEpoch // ignore: cast_nullable_to_non_nullable
-as int,state: null == state ? _self.state : state // ignore: cast_nullable_to_non_nullable
-as BleConnectionState,disconnectReason: freezed == disconnectReason ? _self.disconnectReason : disconnectReason // ignore: cast_nullable_to_non_nullable
-as BleDisconnectReason?,activeNotifyHandles: null == activeNotifyHandles ? _self.activeNotifyHandles : activeNotifyHandles // ignore: cast_nullable_to_non_nullable
-as List<int>,services: freezed == services ? _self.services : services // ignore: cast_nullable_to_non_nullable
-as List<BleServiceInfo>?,restored: null == restored ? _self.restored : restored // ignore: cast_nullable_to_non_nullable
-as bool,
-  ));
-}
-/// Create a copy of BleStateSnapshot
-/// with the given fields replaced by the non-null parameter values.
-@override
-@pragma('vm:prefer-inline')
-$DeepskyDeviceIdCopyWith<$Res> get deviceId {
-
-  return $DeepskyDeviceIdCopyWith<$Res>(_self.deviceId, (value) {
-    return _then(_self.copyWith(deviceId: value));
-  });
-}
-}
 
 
 /// Adds pattern-matching-related methods to [BleStateSnapshot].
@@ -5833,11 +4078,6 @@ class _BleStateSnapshot implements BleStateSnapshot {
 
 @override@JsonKey() final  bool restored;
 
-/// Create a copy of BleStateSnapshot
-/// with the given fields replaced by the non-null parameter values.
-@override @JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-_$BleStateSnapshotCopyWith<_BleStateSnapshot> get copyWith => __$BleStateSnapshotCopyWithImpl<_BleStateSnapshot>(this, _$identity);
 
 
 
@@ -5858,62 +4098,13 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class _$BleStateSnapshotCopyWith<$Res> implements $BleStateSnapshotCopyWith<$Res> {
-  factory _$BleStateSnapshotCopyWith(_BleStateSnapshot value, $Res Function(_BleStateSnapshot) _then) = __$BleStateSnapshotCopyWithImpl;
-@override @useResult
-$Res call({
- DeepskyDeviceId deviceId, int connectionEpoch, BleConnectionState state, BleDisconnectReason? disconnectReason, List<int> activeNotifyHandles, List<BleServiceInfo>? services, bool restored
-});
 
 
-@override $DeepskyDeviceIdCopyWith<$Res> get deviceId;
-
-}
-/// @nodoc
-class __$BleStateSnapshotCopyWithImpl<$Res>
-    implements _$BleStateSnapshotCopyWith<$Res> {
-  __$BleStateSnapshotCopyWithImpl(this._self, this._then);
-
-  final _BleStateSnapshot _self;
-  final $Res Function(_BleStateSnapshot) _then;
-
-/// Create a copy of BleStateSnapshot
-/// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? deviceId = null,Object? connectionEpoch = null,Object? state = null,Object? disconnectReason = freezed,Object? activeNotifyHandles = null,Object? services = freezed,Object? restored = null,}) {
-  return _then(_BleStateSnapshot(
-deviceId: null == deviceId ? _self.deviceId : deviceId // ignore: cast_nullable_to_non_nullable
-as DeepskyDeviceId,connectionEpoch: null == connectionEpoch ? _self.connectionEpoch : connectionEpoch // ignore: cast_nullable_to_non_nullable
-as int,state: null == state ? _self.state : state // ignore: cast_nullable_to_non_nullable
-as BleConnectionState,disconnectReason: freezed == disconnectReason ? _self.disconnectReason : disconnectReason // ignore: cast_nullable_to_non_nullable
-as BleDisconnectReason?,activeNotifyHandles: null == activeNotifyHandles ? _self._activeNotifyHandles : activeNotifyHandles // ignore: cast_nullable_to_non_nullable
-as List<int>,services: freezed == services ? _self._services : services // ignore: cast_nullable_to_non_nullable
-as List<BleServiceInfo>?,restored: null == restored ? _self.restored : restored // ignore: cast_nullable_to_non_nullable
-as bool,
-  ));
-}
-
-/// Create a copy of BleStateSnapshot
-/// with the given fields replaced by the non-null parameter values.
-@override
-@pragma('vm:prefer-inline')
-$DeepskyDeviceIdCopyWith<$Res> get deviceId {
-
-  return $DeepskyDeviceIdCopyWith<$Res>(_self.deviceId, (value) {
-    return _then(_self.copyWith(deviceId: value));
-  });
-}
-}
 
 /// @nodoc
 mixin _$BleStateResync {
 
  String get snapshotId; List<BleStateSnapshot> get devices;
-/// Create a copy of BleStateResync
-/// with the given fields replaced by the non-null parameter values.
-@JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-$BleStateResyncCopyWith<BleStateResync> get copyWith => _$BleStateResyncCopyWithImpl<BleStateResync>(this as BleStateResync, _$identity);
 
 
 
@@ -5934,37 +4125,7 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class $BleStateResyncCopyWith<$Res>  {
-  factory $BleStateResyncCopyWith(BleStateResync value, $Res Function(BleStateResync) _then) = _$BleStateResyncCopyWithImpl;
-@useResult
-$Res call({
- String snapshotId, List<BleStateSnapshot> devices
-});
 
-
-
-
-}
-/// @nodoc
-class _$BleStateResyncCopyWithImpl<$Res>
-    implements $BleStateResyncCopyWith<$Res> {
-  _$BleStateResyncCopyWithImpl(this._self, this._then);
-
-  final BleStateResync _self;
-  final $Res Function(BleStateResync) _then;
-
-/// Create a copy of BleStateResync
-/// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? snapshotId = null,Object? devices = null,}) {
-  return _then(_self.copyWith(
-snapshotId: null == snapshotId ? _self.snapshotId : snapshotId // ignore: cast_nullable_to_non_nullable
-as String,devices: null == devices ? _self.devices : devices // ignore: cast_nullable_to_non_nullable
-as List<BleStateSnapshot>,
-  ));
-}
-
-}
 
 
 /// Adds pattern-matching-related methods to [BleStateResync].
@@ -6113,11 +4274,6 @@ class _BleStateResync implements BleStateResync {
 }
 
 
-/// Create a copy of BleStateResync
-/// with the given fields replaced by the non-null parameter values.
-@override @JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-_$BleStateResyncCopyWith<_BleStateResync> get copyWith => __$BleStateResyncCopyWithImpl<_BleStateResync>(this, _$identity);
 
 
 
@@ -6138,37 +4294,7 @@ String toString() {
 
 }
 
-/// @nodoc
-abstract mixin class _$BleStateResyncCopyWith<$Res> implements $BleStateResyncCopyWith<$Res> {
-  factory _$BleStateResyncCopyWith(_BleStateResync value, $Res Function(_BleStateResync) _then) = __$BleStateResyncCopyWithImpl;
-@override @useResult
-$Res call({
- String snapshotId, List<BleStateSnapshot> devices
-});
 
 
-
-
-}
-/// @nodoc
-class __$BleStateResyncCopyWithImpl<$Res>
-    implements _$BleStateResyncCopyWith<$Res> {
-  __$BleStateResyncCopyWithImpl(this._self, this._then);
-
-  final _BleStateResync _self;
-  final $Res Function(_BleStateResync) _then;
-
-/// Create a copy of BleStateResync
-/// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? snapshotId = null,Object? devices = null,}) {
-  return _then(_BleStateResync(
-snapshotId: null == snapshotId ? _self.snapshotId : snapshotId // ignore: cast_nullable_to_non_nullable
-as String,devices: null == devices ? _self._devices : devices // ignore: cast_nullable_to_non_nullable
-as List<BleStateSnapshot>,
-  ));
-}
-
-
-}
 
 // dart format on

@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:io';
 
 import 'package:deepsky_bluetooth_interface/deepsky_bluetooth_interface.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -27,7 +28,6 @@ void main() {
       expect(first, second);
       expect(first.deviceId, const DeepskyDeviceId('device-1'));
       expect(first.serviceUuids.single, DeepskyUuid.fromString('180F'));
-      expect(first.copyWith(rssi: -60).rssi, -60);
     },
   );
 
@@ -149,9 +149,15 @@ void main() {
 
     expect(policy.delay, const Duration(seconds: 5));
     expect(policy, const ReconnectPolicy(delay: Duration(seconds: 5)));
-    expect(
-      policy.copyWith(delay: const Duration(seconds: 10)).delay,
-      const Duration(seconds: 10),
-    );
+  });
+
+  test('model data classes disable generated copyWith', () {
+    final sourceFile = File('lib/src/models.dart').existsSync()
+        ? File('lib/src/models.dart')
+        : File('packages/deepsky_bluetooth_interface/lib/src/models.dart');
+    final source = sourceFile.readAsStringSync();
+
+    expect(source, isNot(contains('@freezed')));
+    expect(source, contains('@Freezed(copyWith: false)'));
   });
 }
