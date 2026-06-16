@@ -117,16 +117,9 @@ class GattConnection(
         }
         enqueueAndDispatch(OperationKind.DISCOVER_SERVICES, GattOp(callback) { g ->
             // 再探索を開始した時点で旧 tree の handle を無効化する。
+            // BLUETOOTH_CONNECT 剥奪時の例外は dispatchNext() の共通捕捉で Rejected になる。
             handles.clear()
-            // discoverServices() は BLUETOOTH_CONNECT が実行時に剥奪されると例外を投げ得るため、
-            // クラッシュさせず Rejected で返す。
-            val started = try {
-                g.discoverServices()
-            } catch (e: Exception) {
-                return@GattOp StartOutcome.Rejected(
-                    bleError(BleErrorCode.FAILED, "Failed to start service discovery: ${e.message}"))
-            }
-            if (started) StartOutcome.Issued
+            if (g.discoverServices()) StartOutcome.Issued
             else StartOutcome.Rejected(
                 bleError(BleErrorCode.FAILED, "Failed to start service discovery"))
         })
@@ -400,7 +393,16 @@ class GattConnection(
         val next = queue.startNext() ?: return
         @Suppress("UNCHECKED_CAST")
         val op = next.payload as GattOp<Any?>
-        when (val outcome = op.start(g)) {
+        // start() は native GATT 呼び出しを発行する。BLUETOOTH_CONNECT 実行時剥奪の SecurityException
+        // や framework の IllegalStateException で例外になり得るため、捕捉して Rejected と同等に扱う。
+        // 捕捉しないと startNext() で立てた inFlight が残り、watchdog も張られず queue が固まる。
+        val outcome = try {
+            op.start(g)
+        } catch (e: Exception) {
+            StartOutcome.Rejected(
+                bleError(BleErrorCode.FAILED, "Failed to start GATT operation: ${e.message}"))
+        }
+        when (outcome) {
             StartOutcome.Issued -> armWatchdog()
             is StartOutcome.Rejected -> {
                 // 実行を開始できなかった先頭はキューから外し、次へ進む(接続は保持する)。
