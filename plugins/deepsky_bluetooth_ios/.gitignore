@@ -31,3 +31,8 @@ migrate_working_dir/
 .flutter-plugins-dependencies
 /build/
 /coverage/
+
+# Pigeon-generated bindings are produced by `dart run pigeon` (locally or in CI)
+# and are not tracked. The Dart output is already covered by the repo-wide
+# *.g.dart rule; the Swift output is ignored here.
+/ios/deepsky_bluetooth_ios/Sources/deepsky_bluetooth_ios/Messages.g.swift
