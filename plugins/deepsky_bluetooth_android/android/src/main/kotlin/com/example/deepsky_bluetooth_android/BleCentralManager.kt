@@ -6,8 +6,9 @@ import android.content.Context
  * Flutter からの [BleHostApi] 呼び出しをプロセスグローバルな [BleProcessOwner] へ委譲する。
  *
  * scan / connect / disconnect / service discovery / GATT operations(read / write / notify /
- * descriptor / MTU / RSSI)を [BleProcessOwner] へ委譲する。残るスコープ外メソッド(associate /
- * presence / background)は、後続 issue で本実装に置き換える前提の暫定エラーを返す。
+ * descriptor / MTU / RSSI)、associate / presence 監視を [BleProcessOwner] へ委譲する。
+ * Companion Device の世代差分は controller 内へ閉じ込められ、ここからは見えない(#26)。
+ * Companion Device background mode の init / presence event 配送は後続 issue(#27/#29)。
  */
 class BleCentralManager(private val context: Context) : BleHostApi {
 
@@ -27,7 +28,7 @@ class BleCentralManager(private val context: Context) : BleHostApi {
                     BackgroundStrategyMessage.COMPANION_DEVICE ->
                         throw bleError(
                             BleErrorCode.FAILED,
-                            "Companion Device background mode is not implemented yet (#26-#27)",
+                            "Companion Device background mode is not implemented yet (#27)",
                         )
                     null -> throw bleError(
                         BleErrorCode.BACKGROUND_CONFIG_MISSING,
@@ -156,7 +157,7 @@ class BleCentralManager(private val context: Context) : BleHostApi {
 
     override fun associate(filter: ScanFilterMessage?, callback: (Result<String>) -> Unit) =
         observeAsync("associate", callback = callback) {
-            it(notImplemented("associate", "#26"))
+            BleProcessOwner.associate(filter, it)
         }
 
     override fun setDevicePresenceObservation(deviceId: String, enabled: Boolean) {
@@ -164,15 +165,11 @@ class BleCentralManager(private val context: Context) : BleHostApi {
             "setDevicePresenceObservation",
             mapOf("deviceId" to deviceId, "enabled" to enabled),
         ) {
-            throw bleError(
-                BleErrorCode.FAILED, "setDevicePresenceObservation is not implemented yet (#27)")
+            BleProcessOwner.setDevicePresenceObservation(deviceId, enabled)
         }
     }
 
     override fun dispose() = observe("dispose") { BleProcessOwner.dispose() }
-
-    private fun <T> notImplemented(method: String, issue: String): Result<T> =
-        Result.failure(bleError(BleErrorCode.FAILED, "$method is not implemented yet ($issue)"))
 
     private fun <T> observe(
         method: String,
