@@ -238,20 +238,28 @@ class CompanionDeviceController(
     /**
      * 既存の関連付け一覧を純粋層が扱える [CompanionAssociationResolver.AssociationEntry] へ写す。
      * `getMyAssociations()` / `AssociationInfo.getId()` は API 33+ のため、31-32 や CDM 不在では
-     * 空リストを返す。`CompanionDeviceService`（#27）の 33-35 / 36+ presence 正規化が associationId
-     * 逆引きに使う。
+     * 空リスト。framework 例外（`SecurityException` など）はそのまま伝播する低レベルヘルパ。
      */
     @SuppressLint("NewApi")
-    fun associationEntries(): List<CompanionAssociationResolver.AssociationEntry> {
-        val cdm = manager ?: return emptyList()
+    private fun mapAssociations(cdm: CompanionDeviceManager): List<CompanionAssociationResolver.AssociationEntry> {
         // AssociationInfo（id / deviceMacAddress）は API 33+。31-32 は String 経路のみで逆引き不要。
         if (generation.associateApi != CompanionApiGeneration.AssociateApi.MODERN_33_PLUS) {
             return emptyList()
         }
+        return cdm.myAssociations.map {
+            CompanionAssociationResolver.AssociationEntry(it.id, it.deviceMacAddress?.toString())
+        }
+    }
+
+    /**
+     * 関連付け snapshot（best-effort）。`CompanionDeviceService`（#27）の 33-35 / 36+ presence 配送が
+     * associationId 逆引きに使う。CDM 不在・非対応 SDK・framework 例外はすべて空リストへ畳む。presence
+     * 配送は best-effort であり、ここで落としても event 自体を失わないため（owner 側で破棄するだけ）。
+     */
+    fun associationEntries(): List<CompanionAssociationResolver.AssociationEntry> {
+        val cdm = manager ?: return emptyList()
         return try {
-            cdm.myAssociations.map {
-                CompanionAssociationResolver.AssociationEntry(it.id, it.deviceMacAddress?.toString())
-            }
+            mapAssociations(cdm)
         } catch (e: Exception) {
             emptyList()
         }
@@ -263,8 +271,15 @@ class CompanionDeviceController(
         deviceId: String,
         enabled: Boolean,
     ) {
+        // myAssociations は SecurityException 等を投げ得る。読み出し失敗を NOT_ASSOCIATED と取り違えず、
+        // observeByAddress と同様に toFlutterError（SecurityException→permissionDenied）へ正規化する。
+        val entries = try {
+            mapAssociations(cdm)
+        } catch (e: Exception) {
+            throw toFlutterError("setDevicePresenceObservation", e)
+        }
         val associationId = CompanionAssociationResolver.resolveAssociationId(
-            associationEntries(),
+            entries,
             deviceId,
         ) ?: throw bleError(
             BleErrorCode.NOT_ASSOCIATED, "No association for device $deviceId")

@@ -173,10 +173,10 @@ CDM 関連 permission / feature は #26 で追加済み。
 
 ## 受け入れ条件との対応
 
-- [ ] 31-32/33-35/36+ で同じ内部 event になる → `CompanionPresenceNormalizer` + 横断同値テスト
-- [ ] engine 不在でも event を保持できる → `PendingPresenceBuffer`
-- [ ] headless 復活時の presence 必須判定が可能 → `ReconnectDriverSelector`
-- [ ] service callback test が通る → 純粋正規化・配送ロジックの unit test 群
+- [x] 31-32/33-35/36+ で同じ内部 event になる → `CompanionPresenceNormalizer` + 横断同値テスト
+- [x] engine 不在でも event を保持できる → `PendingPresenceBuffer`
+- [x] headless 復活時の presence 必須判定が可能 → `ReconnectDriverSelector`
+- [x] service callback test が通る → 純粋正規化・配送ロジックの unit test 群
 
 ## 実装順序（TDD）
 

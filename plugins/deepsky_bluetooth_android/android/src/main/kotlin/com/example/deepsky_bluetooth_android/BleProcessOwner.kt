@@ -69,8 +69,14 @@ object BleProcessOwner {
 
     /** plugin attach 時に呼ぶ。最初の context を保持し adapter 監視を開始する。 */
     fun attach(context: Context) {
-        if (appContext == null) appContext = context.applicationContext
+        ensureContext(context)
         registerAdapterReceiver()
+    }
+
+    /** appContext だけを確保する。receiver 登録などの副作用は持たない（[ensureAttached] と共用）。 */
+    @Synchronized
+    private fun ensureContext(context: Context) {
+        if (appContext == null) appContext = context.applicationContext
     }
 
     /** engine attach 時の sink 登録。active sink は常に1つとする(Review guide §12)。 */
@@ -189,7 +195,14 @@ object BleProcessOwner {
         )
     }
 
-    /** 正規化済み event を sink へ配送する。sink 不在なら buffer に保持する(Review guide §12)。 */
+    /**
+     * 正規化済み event を sink へ配送する。sink 不在なら buffer に保持する(Review guide §12)。
+     *
+     * sink の確認と record/emit は [registerSink] の「sink 設定 → drain」と同じ monitor 上で atomic に
+     * する。さもないと sink==null を観測した直後に registerSink が drain を終え、その後 record した event
+     * が次の registerSink まで滞留する race が起きる。
+     */
+    @Synchronized
     private fun deliverPresence(event: CompanionPresenceEvent?) {
         if (event == null) return
         val s = sink
@@ -215,11 +228,12 @@ object BleProcessOwner {
         companion?.handleActivityResult(requestCode, resultCode, data) ?: false
 
     /**
-     * service など engine 外の経路から呼ばれても controller を組めるよう context を確保する。
-     * process 復活直後は plugin attach 前で appContext が無いことがあるため。
+     * service など engine 外の経路から呼ばれても controller を組めるよう appContext だけを確保する。
+     * process 復活直後は plugin attach 前で appContext が無いことがあるため。adapter receiver 登録は
+     * plugin の [attach] に任せ、service スレッドからの二重登録を避ける。
      */
     fun ensureAttached(context: Context) {
-        attach(context)
+        ensureContext(context)
     }
 
     private fun companionController(): CompanionDeviceController? {

@@ -14,6 +14,11 @@ import java.util.ArrayDeque
  */
 class PendingPresenceBuffer(private val capacity: Int = DEFAULT_CAPACITY) {
 
+    init {
+        // 容量 0 / 負では "bounded" が成立せず最低 1 件残るため、不正容量は構築時に弾く。
+        require(capacity > 0) { "capacity must be positive, was $capacity" }
+    }
+
     private val events = ArrayDeque<CompanionPresenceEvent>()
 
     /** event を末尾へ追加する。上限超過なら最古を捨てる。 */

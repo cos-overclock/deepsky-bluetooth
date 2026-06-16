@@ -2,11 +2,19 @@ package com.example.deepsky_bluetooth_android.core
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 internal class PendingPresenceBufferTest {
 
     private fun event(id: String, appeared: Boolean = true) = CompanionPresenceEvent(id, appeared)
+
+    @Test
+    fun constructor_rejectsNonPositiveCapacity() {
+        // 容量 0 / 負は "bounded" 不変条件を壊す(最低 1 件残ってしまう)ため拒否する。
+        assertFailsWith<IllegalArgumentException> { PendingPresenceBuffer(capacity = 0) }
+        assertFailsWith<IllegalArgumentException> { PendingPresenceBuffer(capacity = -1) }
+    }
 
     @Test
     fun drain_returnsRecordedEventsInFifoOrder() {
