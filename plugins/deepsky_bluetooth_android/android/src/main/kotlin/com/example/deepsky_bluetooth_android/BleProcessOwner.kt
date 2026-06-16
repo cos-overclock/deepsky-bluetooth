@@ -2,6 +2,7 @@ package com.example.deepsky_bluetooth_android
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
@@ -44,6 +45,12 @@ object BleProcessOwner {
     private var scanCallback: ScanCallback? = null
     private var adapterReceiverRegistered = false
 
+    // Companion Device の関連付けと presence 監視。世代差分は controller 内へ閉じ込め、owner は
+    // 委譲するだけにする(Review guide §§8, 14)。チューザ起動に要る Activity 参照も保持する。
+    @Volatile
+    private var activity: Activity? = null
+    private var companion: CompanionDeviceController? = null
+
     private val adapter: BluetoothAdapter?
         get() = (appContext?.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
 
@@ -83,6 +90,42 @@ object BleProcessOwner {
         val ctx = appContext
             ?: throw BleErrorMapping.bluetoothUnavailable("Owner not attached")
         DeepskyForegroundService.start(ctx, notification)
+    }
+
+    // --- companion device ------------------------------------------------
+
+    /** ActivityAware から Activity を供給/解除する。接続・epoch は process-global のまま保持する。 */
+    fun setActivity(activity: Activity?) {
+        this.activity = activity
+    }
+
+    /**
+     * device を関連付け、確定 deviceId を [callback] へ返す。世代分岐は controller が持つ。
+     */
+    fun associate(filter: ScanFilterMessage?, callback: (Result<String>) -> Unit) {
+        val controller = companionController()
+        if (controller == null) {
+            callback(Result.failure(
+                BleErrorMapping.bluetoothUnavailable("Owner not attached")))
+            return
+        }
+        controller.associate(filter, activity, callback)
+    }
+
+    /** presence 監視の開始/停止。世代分岐と associationId 解決は controller が持つ。 */
+    fun setDevicePresenceObservation(deviceId: String, enabled: Boolean) {
+        val controller = companionController()
+            ?: throw BleErrorMapping.bluetoothUnavailable("Owner not attached")
+        controller.setDevicePresenceObservation(deviceId, enabled)
+    }
+
+    /** ActivityResultListener から転送する associate チューザ結果。処理したら true。 */
+    fun handleCompanionActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean =
+        companion?.handleActivityResult(requestCode, resultCode, data) ?: false
+
+    private fun companionController(): CompanionDeviceController? {
+        val ctx = appContext ?: return null
+        return companion ?: CompanionDeviceController(ctx).also { companion = it }
     }
 
     // --- scan ------------------------------------------------------------
@@ -387,6 +430,8 @@ object BleProcessOwner {
             adapterReceiverRegistered = false
         }
         sink = null
+        activity = null
+        companion = null
         appContext?.let { DeepskyForegroundService.stop(it) }
     }
 
