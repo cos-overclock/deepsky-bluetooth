@@ -1,5 +1,6 @@
 import 'src/observer.dart';
 
+export 'src/messages.g.dart';
 export 'src/observer.dart';
 
 class DeepskyBluetoothIos {
