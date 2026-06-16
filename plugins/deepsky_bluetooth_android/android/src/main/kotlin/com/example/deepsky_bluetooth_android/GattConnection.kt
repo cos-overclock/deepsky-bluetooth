@@ -91,7 +91,7 @@ class GattConnection(
     fun disconnect(callback: (Result<Unit>) -> Unit) {
         val g = gatt
         if (g == null || !isConnected) {
-            callback(Result.failure(bleError(BleErrorCode.NOT_CONNECTED, "Not connected")))
+            callback(Result.failure(BleErrorMapping.notConnected()))
             return
         }
         disconnectCallback = callback
@@ -112,7 +112,7 @@ class GattConnection(
      */
     fun discoverServices(callback: (Result<List<ServiceMessage>>) -> Unit) {
         if (!isConnected) {
-            callback(Result.failure(bleError(BleErrorCode.NOT_CONNECTED, "Not connected")))
+            callback(Result.failure(BleErrorMapping.notConnected()))
             return
         }
         enqueueAndDispatch(OperationKind.DISCOVER_SERVICES, GattOp(callback) { g ->
@@ -202,7 +202,7 @@ class GattConnection(
 
     fun requestMtu(mtu: Long, callback: (Result<Long>) -> Unit) {
         if (!isConnected) {
-            callback(Result.failure(bleError(BleErrorCode.NOT_CONNECTED, "Not connected")))
+            callback(Result.failure(BleErrorMapping.notConnected()))
             return
         }
         enqueueAndDispatch(OperationKind.REQUEST_MTU, GattOp(callback) { g ->
@@ -213,7 +213,7 @@ class GattConnection(
 
     fun readRssi(callback: (Result<Long>) -> Unit) {
         if (!isConnected) {
-            callback(Result.failure(bleError(BleErrorCode.NOT_CONNECTED, "Not connected")))
+            callback(Result.failure(BleErrorMapping.notConnected()))
             return
         }
         enqueueAndDispatch(OperationKind.READ_RSSI, GattOp(callback) { g ->
@@ -224,7 +224,7 @@ class GattConnection(
 
     /** GATT を閉じる。callback は発火させず、未完了操作だけ NotConnected で完了する。 */
     fun close() {
-        failQueue(bleError(BleErrorCode.NOT_CONNECTED, "Not connected"))
+        failQueue(BleErrorMapping.notConnected())
         releaseGatt()
         // 探索中の callback は queue 退役で NotConnected 完了済み。
         disconnectCallback = null
@@ -249,9 +249,10 @@ class GattConnection(
                     disconnectCallback = null
                     // 有効 address への connectGatt 後の確立失敗は connectFailed、
                     // 確立後の予期しない切断は connectionLost(Review guide §6)。
-                    val reason = pendingDisconnectReason
-                        ?: if (wasConnecting) DisconnectReasonMessage.CONNECT_FAILED
-                        else DisconnectReasonMessage.CONNECTION_LOST
+                    val reason = BleErrorMapping.disconnectReasonForConnectionClosed(
+                        wasConnecting = wasConnecting,
+                        pendingReason = pendingDisconnectReason,
+                    )
                     pendingDisconnectReason = null
                     owner.emitConnectionState(
                         deviceId, connectionEpoch, ConnectionStateMessage.DISCONNECTED, reason)
@@ -267,8 +268,7 @@ class GattConnection(
             completeInFlight<List<ServiceMessage>>(CallbackKind.SERVICES_DISCOVERED) { op ->
                 if (status != BluetoothGatt.GATT_SUCCESS) {
                     // 探索開始時に clear 済みのため、失敗時は handle が空のまま = 全 handle NotFound。
-                    op.fail(bleError(
-                        BleErrorCode.FAILED, "Service discovery failed (status=$status)"))
+                    op.fail(BleErrorMapping.gattStatusFailure("Service discovery", status))
                     return@completeInFlight
                 }
                 // handle は discovery 開始時に clear 済み。ここで探索順に採番し直す。
@@ -345,7 +345,7 @@ class GattConnection(
         main.post {
             completeInFlight<Long>(CallbackKind.MTU_CHANGED) { op ->
                 if (status == BluetoothGatt.GATT_SUCCESS) op.succeed(mtu.toLong())
-                else op.fail(bleError(BleErrorCode.FAILED, "MTU request failed (status=$status)"))
+                else op.fail(BleErrorMapping.gattStatusFailure("MTU request", status))
             }
         }
     }
@@ -354,7 +354,7 @@ class GattConnection(
         main.post {
             completeInFlight<Long>(CallbackKind.RSSI_READ) { op ->
                 if (status == BluetoothGatt.GATT_SUCCESS) op.succeed(rssi.toLong())
-                else op.fail(bleError(BleErrorCode.FAILED, "RSSI read failed (status=$status)"))
+                else op.fail(BleErrorMapping.gattStatusFailure("RSSI read", status))
             }
         }
     }
@@ -381,7 +381,7 @@ class GattConnection(
 
     private fun <R> enqueueAndDispatch(kind: OperationKind, op: GattOp<R>) {
         if (queue.isRetired) {
-            op.fail(bleError(BleErrorCode.NOT_CONNECTED, "Not connected"))
+            op.fail(BleErrorMapping.notConnected())
             return
         }
         queue.enqueue(kind, op)
@@ -429,14 +429,14 @@ class GattConnection(
     private fun completeRead(value: ByteArray, status: Int) {
         completeInFlight<ByteArray>(CallbackKind.CHARACTERISTIC_READ) { op ->
             if (status == BluetoothGatt.GATT_SUCCESS) op.succeed(value)
-            else op.fail(bleError(BleErrorCode.FAILED, "Characteristic read failed (status=$status)"))
+            else op.fail(BleErrorMapping.gattStatusFailure("Characteristic read", status))
         }
     }
 
     private fun completeDescriptorRead(value: ByteArray, status: Int) {
         completeInFlight<ByteArray>(CallbackKind.DESCRIPTOR_READ) { op ->
             if (status == BluetoothGatt.GATT_SUCCESS) op.succeed(value)
-            else op.fail(bleError(BleErrorCode.FAILED, "Descriptor read failed (status=$status)"))
+            else op.fail(BleErrorMapping.gattStatusFailure("Descriptor read", status))
         }
     }
 
@@ -494,7 +494,7 @@ class GattConnection(
         characteristicHandle: Long,
         onError: (FlutterError) -> Nothing,
     ): BluetoothGattCharacteristic {
-        if (!isConnected) onError(bleError(BleErrorCode.NOT_CONNECTED, "Not connected"))
+        if (!isConnected) onError(BleErrorMapping.notConnected())
         return handles.resolve(characteristicHandle) as? BluetoothGattCharacteristic
             ?: onError(bleError(BleErrorCode.NOT_FOUND, "Unknown characteristic handle"))
     }
@@ -503,7 +503,7 @@ class GattConnection(
         descriptorHandle: Long,
         onError: (FlutterError) -> Nothing,
     ): BluetoothGattDescriptor {
-        if (!isConnected) onError(bleError(BleErrorCode.NOT_CONNECTED, "Not connected"))
+        if (!isConnected) onError(BleErrorMapping.notConnected())
         return handles.resolve(descriptorHandle) as? BluetoothGattDescriptor
             ?: onError(bleError(BleErrorCode.NOT_FOUND, "Unknown descriptor handle"))
     }
@@ -535,7 +535,10 @@ class GattConnection(
             // 31-32 の boolean 版は busy を区別できないため、false を buffer-full へ正規化する。
             if (g.writeCharacteristic(c)) StartOutcome.Issued
             else StartOutcome.Rejected(
-                bleError(BleErrorCode.BUFFER_FULL, "Characteristic write buffer full"))
+                BleErrorMapping.gattWriteStartStatus(
+                    BluetoothStatusCodes.ERROR_GATT_WRITE_REQUEST_BUSY,
+                    "Characteristic write",
+                ))
         }
     }
 
@@ -551,16 +554,16 @@ class GattConnection(
             d.value = value
             if (g.writeDescriptor(d)) StartOutcome.Issued
             else StartOutcome.Rejected(
-                bleError(BleErrorCode.BUFFER_FULL, "Descriptor write buffer full"))
+                BleErrorMapping.gattWriteStartStatus(
+                    BluetoothStatusCodes.ERROR_GATT_WRITE_REQUEST_BUSY,
+                    "Descriptor write",
+                ))
         }
     }
 
     private fun outcomeForWriteStatus(status: Int): StartOutcome = when (status) {
         BluetoothStatusCodes.SUCCESS -> StartOutcome.Issued
-        BluetoothStatusCodes.ERROR_GATT_WRITE_REQUEST_BUSY ->
-            StartOutcome.Rejected(bleError(BleErrorCode.BUFFER_FULL, "Write request busy"))
-        else ->
-            StartOutcome.Rejected(bleError(BleErrorCode.FAILED, "Write failed (status=$status)"))
+        else -> StartOutcome.Rejected(BleErrorMapping.gattWriteStartStatus(status, "Write"))
     }
 
     // --- DTO 変換(探索順に handle 採番)--------------------------------

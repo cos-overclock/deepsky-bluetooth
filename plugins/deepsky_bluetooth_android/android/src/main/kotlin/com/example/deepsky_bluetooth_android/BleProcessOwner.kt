@@ -72,7 +72,9 @@ object BleProcessOwner {
 
     /** notifyDartReady 時などに現在の adapter 状態を sink へ通知する。 */
     fun emitCurrentAdapterState() {
-        sink?.onAdapterStateChanged(currentAdapterState()) {}
+        val state = currentAdapterState()
+        BleNativeObservers.emitCallback("onAdapterStateChanged", mapOf("state" to state))
+        sink?.onAdapterStateChanged(state) {}
     }
 
     // --- scan ------------------------------------------------------------
@@ -80,19 +82,23 @@ object BleProcessOwner {
     /** ネイティブ `ScanFilter`(1 エントリ=1 ScanFilter、リスト全体で OR)で scan を開始する。 */
     fun startScan(filter: ScanFilterMessage?, settings: AndroidScanSettingsMessage) {
         val ctx = appContext
-            ?: throw bleError(BleErrorCode.BLUETOOTH_UNAVAILABLE, "Owner not attached")
+            ?: throw BleErrorMapping.bluetoothUnavailable("Owner not attached")
         if (!hasPermission(Manifest.permission.BLUETOOTH_SCAN)) {
-            throw bleError(BleErrorCode.PERMISSION_DENIED, "BLUETOOTH_SCAN denied")
+            throw BleErrorMapping.permissionDenied(Manifest.permission.BLUETOOTH_SCAN)
         }
         if (!ctx.packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
-            throw bleError(BleErrorCode.BLUETOOTH_UNAVAILABLE, "Bluetooth LE unsupported")
+            throw BleErrorMapping.bluetoothUnavailable("Bluetooth LE unsupported")
         }
-        val a = adapter ?: throw bleError(BleErrorCode.BLUETOOTH_UNAVAILABLE, "No Bluetooth adapter")
-        if (!a.isEnabled) throw bleError(BleErrorCode.BLUETOOTH_OFF, "Bluetooth is off")
+        val a = adapter ?: throw BleErrorMapping.bluetoothUnavailable("No Bluetooth adapter")
+        if (!a.isEnabled) throw BleErrorMapping.bluetoothOff()
         if (scanCallback != null) throw bleError(BleErrorCode.ALREADY_SCANNING, "Scan already running")
 
         val cb = object : ScanCallback() {
             override fun onScanResult(callbackType: Int, result: ScanResult) {
+                BleNativeObservers.emitCallback(
+                    "onScanResult",
+                    mapOf("deviceId" to result.device.address, "callbackType" to callbackType),
+                )
                 sink?.onScanResult(result.toMessage()) {}
             }
 
@@ -103,6 +109,7 @@ object BleProcessOwner {
 
             override fun onScanFailed(errorCode: Int) {
                 scanCallback = null
+                BleNativeObservers.emitCallback("onScanFailed", mapOf("errorCode" to errorCode))
                 sink?.onScanFailed(
                     BleErrorCode.FAILED, "Scan failed (errorCode=$errorCode)") {}
             }
@@ -125,27 +132,27 @@ object BleProcessOwner {
         val ctx = appContext
         if (ctx == null) {
             callback(Result.failure(
-                bleError(BleErrorCode.BLUETOOTH_UNAVAILABLE, "Owner not attached")))
+                BleErrorMapping.bluetoothUnavailable("Owner not attached")))
             return
         }
         if (!hasPermission(Manifest.permission.BLUETOOTH_CONNECT)) {
             callback(Result.failure(
-                bleError(BleErrorCode.PERMISSION_DENIED, "BLUETOOTH_CONNECT denied")))
+                BleErrorMapping.permissionDenied(Manifest.permission.BLUETOOTH_CONNECT)))
             return
         }
         if (!ctx.packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
             callback(Result.failure(
-                bleError(BleErrorCode.BLUETOOTH_UNAVAILABLE, "Bluetooth LE unsupported")))
+                BleErrorMapping.bluetoothUnavailable("Bluetooth LE unsupported")))
             return
         }
         val a = adapter
         if (a == null) {
             callback(Result.failure(
-                bleError(BleErrorCode.BLUETOOTH_UNAVAILABLE, "No Bluetooth adapter")))
+                BleErrorMapping.bluetoothUnavailable("No Bluetooth adapter")))
             return
         }
         if (!a.isEnabled) {
-            callback(Result.failure(bleError(BleErrorCode.BLUETOOTH_OFF, "Bluetooth is off")))
+            callback(Result.failure(BleErrorMapping.bluetoothOff()))
             return
         }
         // 有効な device identity を構築できない場合だけ deviceNotFound(Review guide §6)。
@@ -153,7 +160,7 @@ object BleProcessOwner {
             a.getRemoteDevice(deviceId)
         } catch (e: IllegalArgumentException) {
             callback(Result.failure(
-                bleError(BleErrorCode.NOT_FOUND, "Invalid device id: $deviceId")))
+                BleErrorMapping.invalidDeviceId(deviceId)))
             return
         }
         // 接続実体を生成するたびに新しい epoch を採番する(Review guide §9)。既存接続は退役させ、
@@ -170,7 +177,7 @@ object BleProcessOwner {
     fun disconnect(deviceId: String, connectionEpoch: Long, callback: (Result<Unit>) -> Unit) {
         val c = connections[deviceId]
         if (c == null || c.connectionEpoch != connectionEpoch) {
-            callback(Result.failure(bleError(BleErrorCode.NOT_CONNECTED, "Not connected")))
+            callback(Result.failure(BleErrorMapping.notConnected()))
             return
         }
         c.disconnect(callback)
@@ -189,7 +196,7 @@ object BleProcessOwner {
     ) {
         val c = connections[deviceId]
         if (c == null || c.connectionEpoch != connectionEpoch) {
-            callback(Result.failure(bleError(BleErrorCode.NOT_CONNECTED, "Not connected")))
+            callback(Result.failure(BleErrorMapping.notConnected()))
             return
         }
         c.discoverServices(callback)
@@ -203,7 +210,7 @@ object BleProcessOwner {
         callback: (Result<ByteArray>) -> Unit,
     ) {
         val c = connectionFor(target.deviceId, target.connectionEpoch) {
-            callback(Result.failure(bleError(BleErrorCode.NOT_CONNECTED, "Not connected")))
+            callback(Result.failure(BleErrorMapping.notConnected()))
         } ?: return
         c.readCharacteristic(target.characteristicHandle, strictRead, callback)
     }
@@ -215,7 +222,7 @@ object BleProcessOwner {
         callback: (Result<Unit>) -> Unit,
     ) {
         val c = connectionFor(target.deviceId, target.connectionEpoch) {
-            callback(Result.failure(bleError(BleErrorCode.NOT_CONNECTED, "Not connected")))
+            callback(Result.failure(BleErrorMapping.notConnected()))
         } ?: return
         c.writeCharacteristic(target.characteristicHandle, value, withResponse, callback)
     }
@@ -226,7 +233,7 @@ object BleProcessOwner {
         callback: (Result<Unit>) -> Unit,
     ) {
         val c = connectionFor(target.deviceId, target.connectionEpoch) {
-            callback(Result.failure(bleError(BleErrorCode.NOT_CONNECTED, "Not connected")))
+            callback(Result.failure(BleErrorMapping.notConnected()))
         } ?: return
         c.setNotify(target.characteristicHandle, type, callback)
     }
@@ -236,7 +243,7 @@ object BleProcessOwner {
         callback: (Result<ByteArray>) -> Unit,
     ) {
         val c = connectionFor(target.deviceId, target.connectionEpoch) {
-            callback(Result.failure(bleError(BleErrorCode.NOT_CONNECTED, "Not connected")))
+            callback(Result.failure(BleErrorMapping.notConnected()))
         } ?: return
         c.readDescriptor(target.descriptorHandle, callback)
     }
@@ -247,7 +254,7 @@ object BleProcessOwner {
         callback: (Result<Unit>) -> Unit,
     ) {
         val c = connectionFor(target.deviceId, target.connectionEpoch) {
-            callback(Result.failure(bleError(BleErrorCode.NOT_CONNECTED, "Not connected")))
+            callback(Result.failure(BleErrorMapping.notConnected()))
         } ?: return
         c.writeDescriptor(target.descriptorHandle, value, callback)
     }
@@ -259,14 +266,14 @@ object BleProcessOwner {
         callback: (Result<Long>) -> Unit,
     ) {
         val c = connectionFor(deviceId, connectionEpoch) {
-            callback(Result.failure(bleError(BleErrorCode.NOT_CONNECTED, "Not connected")))
+            callback(Result.failure(BleErrorMapping.notConnected()))
         } ?: return
         c.requestMtu(mtu, callback)
     }
 
     fun readRssi(deviceId: String, connectionEpoch: Long, callback: (Result<Long>) -> Unit) {
         val c = connectionFor(deviceId, connectionEpoch) {
-            callback(Result.failure(bleError(BleErrorCode.NOT_CONNECTED, "Not connected")))
+            callback(Result.failure(BleErrorMapping.notConnected()))
         } ?: return
         c.readRssi(callback)
     }
@@ -298,6 +305,15 @@ object BleProcessOwner {
         reason: DisconnectReasonMessage?,
     ) {
         if (!epochs.isCurrent(deviceId, epoch)) return
+        BleNativeObservers.emitCallback(
+            "onConnectionStateChanged",
+            mapOf(
+                "deviceId" to deviceId,
+                "connectionEpoch" to epoch,
+                "state" to state,
+                "reason" to reason,
+            ),
+        )
         sink?.onConnectionStateChanged(deviceId, epoch, state, reason) {}
     }
 
@@ -312,12 +328,24 @@ object BleProcessOwner {
         value: ByteArray,
     ) {
         if (!epochs.isCurrent(deviceId, epoch)) return
+        BleNativeObservers.emitCallback(
+            "onCharacteristicValue",
+            mapOf(
+                "deviceId" to deviceId,
+                "connectionEpoch" to epoch,
+                "characteristicHandle" to characteristicHandle,
+            ),
+        )
         sink?.onCharacteristicValue(deviceId, epoch, characteristicHandle, value) {}
     }
 
     /** 操作 timeout を epoch guard 越しに通知する。退役前に呼ぶこと(Review guide §10)。 */
     internal fun onOperationTimeout(deviceId: String, epoch: Long) {
         if (!epochs.isCurrent(deviceId, epoch)) return
+        BleNativeObservers.emitCallback(
+            "onOperationTimeout",
+            mapOf("deviceId" to deviceId, "connectionEpoch" to epoch),
+        )
         sink?.onOperationTimeout(deviceId, epoch) {}
     }
 
@@ -369,10 +397,20 @@ object BleProcessOwner {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action != BluetoothAdapter.ACTION_STATE_CHANGED) return
             when (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)) {
-                BluetoothAdapter.STATE_ON ->
+                BluetoothAdapter.STATE_ON -> {
+                    BleNativeObservers.emitCallback(
+                        "onAdapterStateChanged",
+                        mapOf("state" to AdapterStateMessage.POWERED_ON),
+                    )
                     sink?.onAdapterStateChanged(AdapterStateMessage.POWERED_ON) {}
-                BluetoothAdapter.STATE_OFF ->
+                }
+                BluetoothAdapter.STATE_OFF -> {
+                    BleNativeObservers.emitCallback(
+                        "onAdapterStateChanged",
+                        mapOf("state" to AdapterStateMessage.POWERED_OFF),
+                    )
                     sink?.onAdapterStateChanged(AdapterStateMessage.POWERED_OFF) {}
+                }
             }
         }
     }
