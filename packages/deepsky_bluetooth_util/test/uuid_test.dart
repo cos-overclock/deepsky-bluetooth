@@ -88,8 +88,7 @@ void main() {
 
     expect(uuid16.str, '180f');
     expect('$uuid16', '180f');
-    expect(uuid16.uuid, '180f');
-    expect(uuid16.uuid128, '0000180f-0000-1000-8000-00805f9b34fb');
+    expect(uuid16.str128, '0000180f-0000-1000-8000-00805f9b34fb');
     expect(uuid32.str, '12345678');
     expect(vendorUuid.str, '11111111-2222-3333-4444-555555555555');
   });
