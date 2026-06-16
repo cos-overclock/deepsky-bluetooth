@@ -1,5 +1,6 @@
 package com.example.deepsky_bluetooth_android
 
+import android.content.Context
 import android.content.Intent
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -23,8 +24,14 @@ class DeepskyBluetoothAndroidPlugin :
     private var callbacks: BleCallbacksApi? = null
     private var activityBinding: ActivityPluginBinding? = null
 
+    // Whether this engine's plugin instance ever attached to an Activity. A headless relaunch
+    // engine never does, so this distinguishes UI vs headless engines on detach (#28).
+    private var wasUiEngine = false
+    private var appContext: Context? = null
+
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         BleNativeObservers.observeMethod("plugin.attach") {
+            appContext = binding.applicationContext
             BleProcessOwner.attach(binding.applicationContext)
             val cb = BleCallbacksApi(binding.binaryMessenger)
             BleProcessOwner.registerSink(cb)
@@ -39,6 +46,10 @@ class DeepskyBluetoothAndroidPlugin :
             // engine 固有 sink だけを解除。接続・scan・epoch は owner が保持し続ける(close しない)。
             callbacks?.let { BleProcessOwner.unregisterSink(it) }
             callbacks = null
+            // Report the detach so the launcher can relaunch a headless engine when a UI engine is
+            // lost while the Foreground Service runs (#28). A headless engine never attached to an
+            // Activity, so wasUiEngine distinguishes the two.
+            appContext?.let { HeadlessEngineLauncher.onEngineDetached(it, isHeadless = !wasUiEngine) }
         }
     }
 
@@ -62,6 +73,10 @@ class DeepskyBluetoothAndroidPlugin :
             activityBinding = binding
             binding.addActivityResultListener(this)
             BleProcessOwner.setActivity(binding.activity)
+            // This engine drives UI; mark it so a later detach is treated as a UI (not headless)
+            // loss, and let the launcher hold any headless engine until the handover ack (#28).
+            wasUiEngine = true
+            HeadlessEngineLauncher.onUiEngineCandidateAttached()
         }
     }
 
