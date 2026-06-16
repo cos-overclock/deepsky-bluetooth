@@ -1,38 +1,29 @@
 package com.example.deepsky_bluetooth_android
 
 import io.flutter.embedding.engine.plugins.FlutterPlugin
-import io.flutter.plugin.common.MethodCall
-import io.flutter.plugin.common.MethodChannel
-import io.flutter.plugin.common.MethodChannel.MethodCallHandler
-import io.flutter.plugin.common.MethodChannel.Result
 
-/** DeepskyBluetoothAndroidPlugin */
-class DeepskyBluetoothAndroidPlugin :
-    FlutterPlugin,
-    MethodCallHandler {
-    // The MethodChannel that will the communication between Flutter and native Android
-    //
-    // This local reference serves to register the plugin with the Flutter Engine and unregister it
-    // when the Flutter Engine is detached from the Activity
-    private lateinit var channel: MethodChannel
+/**
+ * 各 Flutter engine に attach する plugin instance。
+ *
+ * BLE 接続・接続 epoch・scan はプロセスグローバルな [BleProcessOwner] が保持し、本 plugin は
+ * messenger sink を提供して [BleHostApi] を配線するだけ。engine detach では sink を解除する
+ * のみで接続は保持する(Review guide §12)。
+ */
+class DeepskyBluetoothAndroidPlugin : FlutterPlugin {
+    private var callbacks: BleCallbacksApi? = null
 
-    override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
-        channel = MethodChannel(flutterPluginBinding.binaryMessenger, "deepsky_bluetooth_android")
-        channel.setMethodCallHandler(this)
-    }
-
-    override fun onMethodCall(
-        call: MethodCall,
-        result: Result
-    ) {
-        if (call.method == "getPlatformVersion") {
-            result.success("Android ${android.os.Build.VERSION.RELEASE}")
-        } else {
-            result.notImplemented()
-        }
+    override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        BleProcessOwner.attach(binding.applicationContext)
+        val cb = BleCallbacksApi(binding.binaryMessenger)
+        BleProcessOwner.registerSink(cb)
+        callbacks = cb
+        BleHostApi.setUp(binding.binaryMessenger, BleCentralManager(binding.applicationContext))
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
-        channel.setMethodCallHandler(null)
+        BleHostApi.setUp(binding.binaryMessenger, null)
+        // engine 固有 sink だけを解除。接続・scan・epoch は owner が保持し続ける(close しない)。
+        callbacks?.let { BleProcessOwner.unregisterSink(it) }
+        callbacks = null
     }
 }

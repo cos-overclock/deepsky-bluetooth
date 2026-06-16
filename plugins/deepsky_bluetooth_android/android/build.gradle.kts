@@ -45,7 +45,7 @@ android {
     }
 
     defaultConfig {
-        minSdk = 24
+        minSdk = 31
     }
 
     testOptions {
