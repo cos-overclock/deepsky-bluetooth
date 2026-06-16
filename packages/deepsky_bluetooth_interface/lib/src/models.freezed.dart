@@ -1777,22 +1777,22 @@ String toString() {
 /// @nodoc
 mixin _$BleCharacteristicProperties {
 
- bool get broadcast; bool get read; bool get writeWithoutResponse; bool get writeWithResponse; bool get notify; bool get indicate; bool get authenticatedSignedWrites; bool get extendedProperties;
+ List<BleCharacteristicProperty> get values;
 
 
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is BleCharacteristicProperties&&(identical(other.broadcast, broadcast) || other.broadcast == broadcast)&&(identical(other.read, read) || other.read == read)&&(identical(other.writeWithoutResponse, writeWithoutResponse) || other.writeWithoutResponse == writeWithoutResponse)&&(identical(other.writeWithResponse, writeWithResponse) || other.writeWithResponse == writeWithResponse)&&(identical(other.notify, notify) || other.notify == notify)&&(identical(other.indicate, indicate) || other.indicate == indicate)&&(identical(other.authenticatedSignedWrites, authenticatedSignedWrites) || other.authenticatedSignedWrites == authenticatedSignedWrites)&&(identical(other.extendedProperties, extendedProperties) || other.extendedProperties == extendedProperties));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is BleCharacteristicProperties&&const DeepCollectionEquality().equals(other.values, values));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,broadcast,read,writeWithoutResponse,writeWithResponse,notify,indicate,authenticatedSignedWrites,extendedProperties);
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(values));
 
 @override
 String toString() {
-  return 'BleCharacteristicProperties(broadcast: $broadcast, read: $read, writeWithoutResponse: $writeWithoutResponse, writeWithResponse: $writeWithResponse, notify: $notify, indicate: $indicate, authenticatedSignedWrites: $authenticatedSignedWrites, extendedProperties: $extendedProperties)';
+  return 'BleCharacteristicProperties(values: $values)';
 }
 
 
@@ -1879,10 +1879,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( bool broadcast,  bool read,  bool writeWithoutResponse,  bool writeWithResponse,  bool notify,  bool indicate,  bool authenticatedSignedWrites,  bool extendedProperties)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<BleCharacteristicProperty> values)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _BleCharacteristicProperties() when $default != null:
-return $default(_that.broadcast,_that.read,_that.writeWithoutResponse,_that.writeWithResponse,_that.notify,_that.indicate,_that.authenticatedSignedWrites,_that.extendedProperties);case _:
+return $default(_that.values);case _:
   return orElse();
 
 }
@@ -1900,10 +1900,10 @@ return $default(_that.broadcast,_that.read,_that.writeWithoutResponse,_that.writ
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( bool broadcast,  bool read,  bool writeWithoutResponse,  bool writeWithResponse,  bool notify,  bool indicate,  bool authenticatedSignedWrites,  bool extendedProperties)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<BleCharacteristicProperty> values)  $default,) {final _that = this;
 switch (_that) {
 case _BleCharacteristicProperties():
-return $default(_that.broadcast,_that.read,_that.writeWithoutResponse,_that.writeWithResponse,_that.notify,_that.indicate,_that.authenticatedSignedWrites,_that.extendedProperties);case _:
+return $default(_that.values);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -1920,10 +1920,10 @@ return $default(_that.broadcast,_that.read,_that.writeWithoutResponse,_that.writ
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( bool broadcast,  bool read,  bool writeWithoutResponse,  bool writeWithResponse,  bool notify,  bool indicate,  bool authenticatedSignedWrites,  bool extendedProperties)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<BleCharacteristicProperty> values)?  $default,) {final _that = this;
 switch (_that) {
 case _BleCharacteristicProperties() when $default != null:
-return $default(_that.broadcast,_that.read,_that.writeWithoutResponse,_that.writeWithResponse,_that.notify,_that.indicate,_that.authenticatedSignedWrites,_that.extendedProperties);case _:
+return $default(_that.values);case _:
   return null;
 
 }
@@ -1935,33 +1935,32 @@ return $default(_that.broadcast,_that.read,_that.writeWithoutResponse,_that.writ
 
 
 class _BleCharacteristicProperties implements BleCharacteristicProperties {
-  const _BleCharacteristicProperties({this.broadcast = false, this.read = false, this.writeWithoutResponse = false, this.writeWithResponse = false, this.notify = false, this.indicate = false, this.authenticatedSignedWrites = false, this.extendedProperties = false});
+  const _BleCharacteristicProperties({final  List<BleCharacteristicProperty> values = const <BleCharacteristicProperty>[]}): _values = values;
 
 
-@override@JsonKey() final  bool broadcast;
-@override@JsonKey() final  bool read;
-@override@JsonKey() final  bool writeWithoutResponse;
-@override@JsonKey() final  bool writeWithResponse;
-@override@JsonKey() final  bool notify;
-@override@JsonKey() final  bool indicate;
-@override@JsonKey() final  bool authenticatedSignedWrites;
-@override@JsonKey() final  bool extendedProperties;
+ final  List<BleCharacteristicProperty> _values;
+@override@JsonKey() List<BleCharacteristicProperty> get values {
+  if (_values is EqualUnmodifiableListView) return _values;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_values);
+}
+
 
 
 
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _BleCharacteristicProperties&&(identical(other.broadcast, broadcast) || other.broadcast == broadcast)&&(identical(other.read, read) || other.read == read)&&(identical(other.writeWithoutResponse, writeWithoutResponse) || other.writeWithoutResponse == writeWithoutResponse)&&(identical(other.writeWithResponse, writeWithResponse) || other.writeWithResponse == writeWithResponse)&&(identical(other.notify, notify) || other.notify == notify)&&(identical(other.indicate, indicate) || other.indicate == indicate)&&(identical(other.authenticatedSignedWrites, authenticatedSignedWrites) || other.authenticatedSignedWrites == authenticatedSignedWrites)&&(identical(other.extendedProperties, extendedProperties) || other.extendedProperties == extendedProperties));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _BleCharacteristicProperties&&const DeepCollectionEquality().equals(other._values, _values));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,broadcast,read,writeWithoutResponse,writeWithResponse,notify,indicate,authenticatedSignedWrites,extendedProperties);
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_values));
 
 @override
 String toString() {
-  return 'BleCharacteristicProperties(broadcast: $broadcast, read: $read, writeWithoutResponse: $writeWithoutResponse, writeWithResponse: $writeWithResponse, notify: $notify, indicate: $indicate, authenticatedSignedWrites: $authenticatedSignedWrites, extendedProperties: $extendedProperties)';
+  return 'BleCharacteristicProperties(values: $values)';
 }
 
 

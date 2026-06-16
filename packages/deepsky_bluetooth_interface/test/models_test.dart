@@ -81,6 +81,16 @@ void main() {
       BleNotifyType.notify,
       BleNotifyType.indicate,
     ]);
+    expect(BleCharacteristicProperty.values, [
+      BleCharacteristicProperty.broadcast,
+      BleCharacteristicProperty.read,
+      BleCharacteristicProperty.writeWithoutResponse,
+      BleCharacteristicProperty.writeWithResponse,
+      BleCharacteristicProperty.notify,
+      BleCharacteristicProperty.indicate,
+      BleCharacteristicProperty.authenticatedSignedWrites,
+      BleCharacteristicProperty.extendedProperties,
+    ]);
   });
 
   test('GATT info DTOs use uuid values and epoch scoped handles', () {
@@ -92,7 +102,12 @@ void main() {
       handle: 2,
       serviceHandle: 1,
       uuid: DeepskyUuid.fromString('2A19'),
-      properties: const BleCharacteristicProperties(read: true, notify: true),
+      properties: const BleCharacteristicProperties(
+        values: [
+          BleCharacteristicProperty.read,
+          BleCharacteristicProperty.notify,
+        ],
+      ),
       descriptors: [descriptor],
     );
     final service = BleServiceInfo(
@@ -109,6 +124,10 @@ void main() {
 
     expect(service.characteristics.single.serviceHandle, service.handle);
     expect(characteristic.descriptors.single, descriptor);
+    expect(characteristic.properties.values, [
+      BleCharacteristicProperty.read,
+      BleCharacteristicProperty.notify,
+    ]);
     expect(target.connectionEpoch, 7);
     expect(target.descriptorHandle, descriptor.handle);
     expect(

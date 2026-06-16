@@ -144,17 +144,22 @@ abstract class BleScanResult with _$BleScanResult {
   }) = _BleScanResult;
 }
 
+enum BleCharacteristicProperty {
+  broadcast,
+  read,
+  writeWithoutResponse,
+  writeWithResponse,
+  notify,
+  indicate,
+  authenticatedSignedWrites,
+  extendedProperties,
+}
+
 @Freezed(copyWith: false)
 abstract class BleCharacteristicProperties with _$BleCharacteristicProperties {
   const factory BleCharacteristicProperties({
-    @Default(false) bool broadcast,
-    @Default(false) bool read,
-    @Default(false) bool writeWithoutResponse,
-    @Default(false) bool writeWithResponse,
-    @Default(false) bool notify,
-    @Default(false) bool indicate,
-    @Default(false) bool authenticatedSignedWrites,
-    @Default(false) bool extendedProperties,
+    @Default(<BleCharacteristicProperty>[])
+    List<BleCharacteristicProperty> values,
   }) = _BleCharacteristicProperties;
 }
 
