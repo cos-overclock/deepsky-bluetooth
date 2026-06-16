@@ -213,8 +213,7 @@ final class CharacteristicReadAmbiguousWhileNotifying
 
   @override
   String get message =>
-      'read(strictRead: true) is ambiguous while notifications are enabled.';
-}
+      'Read results are ambiguous while notifications are enabled.';
 
 final class CharacteristicReadFailed extends CharacteristicReadError {
   const CharacteristicReadFailed(this.message, {super.cause, super.stackTrace});
