@@ -239,6 +239,7 @@ void main() {
     final platform = _FakePlatform();
 
     expect(platform.scanResults, isA<Stream<BleScanResult>>());
+    expect(platform.scanErrors, isA<Stream<ScanError>>());
     expect(
       platform.connectionEvents,
       isA<Stream<BlePlatformConnectionEvent>>(),
