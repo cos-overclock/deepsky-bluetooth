@@ -106,7 +106,7 @@ void main() {
     expect(discoverServices(const DiscoverServicesFailed('boom')), 'failed');
     expect(
       read(const CharacteristicReadAmbiguousWhileNotifying()),
-      'ambiguous',
+      'readAmbiguousWhileNotifying',
     );
     expect(write(const CharacteristicWriteBufferFull()), 'bufferFull');
     expect(notify(const NotifyNotSupported()), 'notSupported');
