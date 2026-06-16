@@ -7,7 +7,8 @@ void main() {
     final uuid = DeepskyUuid.fromString('180F');
     const deviceId = DeepskyDeviceId('device-1');
 
-    expect(uuid.value, '0000180f-0000-1000-8000-00805f9b34fb');
+    expect(uuid.str128, '0000180f-0000-1000-8000-00805f9b34fb');
+    expect(cccd, const DeepskyUuid('00002902-0000-1000-8000-00805f9b34fb'));
     expect({deviceId: true}[const DeepskyDeviceId('device-1')], isTrue);
   });
 }
