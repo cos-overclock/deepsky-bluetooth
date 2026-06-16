@@ -3,10 +3,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:deepsky_bluetooth_interface/deepsky_bluetooth_interface.dart';
 
 void main() {
-  test('adds one to input values', () {
-    final calculator = Calculator();
-    expect(calculator.addOne(2), 3);
-    expect(calculator.addOne(-7), -6);
-    expect(calculator.addOne(0), 1);
+  test('reexports util value types', () {
+    final uuid = DeepskyUuid.fromString('180F');
+    const deviceId = DeepskyDeviceId('device-1');
+
+    expect(uuid.value, '0000180f-0000-1000-8000-00805f9b34fb');
+    expect({deviceId: true}[const DeepskyDeviceId('device-1')], isTrue);
   });
 }

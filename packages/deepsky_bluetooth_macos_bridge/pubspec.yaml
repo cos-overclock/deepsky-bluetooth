@@ -11,11 +11,14 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  steady: ^1.2.0
+  deepsky_bluetooth_util:
+    path: ../deepsky_bluetooth_util
 
   deepsky_bluetooth_interface:
     path: ../deepsky_bluetooth_interface
 
-  deepsky_bluetooth_android:
+  deepsky_bluetooth_macos:
     path: ../../plugins/deepsky_bluetooth_macos
 
 dev_dependencies:
