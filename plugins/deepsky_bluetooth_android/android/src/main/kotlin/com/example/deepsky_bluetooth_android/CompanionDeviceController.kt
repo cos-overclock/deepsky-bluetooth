@@ -79,14 +79,20 @@ class CompanionDeviceController(
             return
         }
         pendingAssociate = callback
-        val request = buildAssociationRequest(filter)
-        when (generation.associateApi) {
-            CompanionApiGeneration.AssociateApi.LEGACY_31_32 ->
-                cdm.associate(request, legacyCallback(activity), null)
-            CompanionApiGeneration.AssociateApi.MODERN_33_PLUS ->
-                associateModern(cdm, request, activity)
-            null -> completeAssociate(Result.failure(
-                bleError(BleErrorCode.NOT_SUPPORTED, "Companion Device is unavailable on this SDK")))
+        // request 構築(不正 UUID など)や cdm.associate が同期 throw しても pendingAssociate を
+        // 必ず解放する。さもないと以降の associate が永久に "already in progress" で弾かれる。
+        try {
+            val request = buildAssociationRequest(filter)
+            when (generation.associateApi) {
+                CompanionApiGeneration.AssociateApi.LEGACY_31_32 ->
+                    cdm.associate(request, legacyCallback(activity), null)
+                CompanionApiGeneration.AssociateApi.MODERN_33_PLUS ->
+                    associateModern(cdm, request, activity)
+                null -> completeAssociate(Result.failure(
+                    bleError(BleErrorCode.NOT_SUPPORTED, "Companion Device is unavailable on this SDK")))
+            }
+        } catch (e: Exception) {
+            completeAssociate(Result.failure(toFlutterError("associate", e)))
         }
     }
 
@@ -203,11 +209,15 @@ class CompanionDeviceController(
         }
         val cdm = manager
             ?: throw bleError(BleErrorCode.BLUETOOTH_UNAVAILABLE, "CompanionDeviceManager unavailable")
+        // deviceId は入口で一度だけ正規化・検証する。connect と同じく不正 id は invalidDeviceId に
+        // 揃え、legacy の raw IllegalArgumentException / modern の誤った notAssociated を避ける。
+        val normalized = DeviceAddressNormalizer.normalize(deviceId)
+            ?: throw BleErrorMapping.invalidDeviceId(deviceId)
         when (generation.presenceApi) {
             CompanionApiGeneration.PresenceApi.LEGACY_31_35 ->
-                observeByAddress(cdm, deviceId, enabled)
+                observeByAddress(cdm, normalized, enabled)
             CompanionApiGeneration.PresenceApi.MODERN_36_PLUS ->
-                observeByAssociationId(cdm, deviceId, enabled)
+                observeByAssociationId(cdm, normalized, enabled)
             null ->
                 throw bleError(BleErrorCode.NOT_SUPPORTED, "Companion Device is unavailable on this SDK")
         }
@@ -215,8 +225,14 @@ class CompanionDeviceController(
 
     @Suppress("DEPRECATION")
     private fun observeByAddress(cdm: CompanionDeviceManager, deviceId: String, enabled: Boolean) {
-        if (enabled) cdm.startObservingDevicePresence(deviceId)
-        else cdm.stopObservingDevicePresence(deviceId)
+        // framework 例外(SecurityException など)を構造化エラーへ変換し、untyped platform error が
+        // Dart 側へ漏れないようにする。
+        try {
+            if (enabled) cdm.startObservingDevicePresence(deviceId)
+            else cdm.stopObservingDevicePresence(deviceId)
+        } catch (e: Exception) {
+            throw toFlutterError("setDevicePresenceObservation", e)
+        }
     }
 
     @SuppressLint("NewApi")
@@ -235,8 +251,25 @@ class CompanionDeviceController(
         val request = ObservingDevicePresenceRequest.Builder()
             .setAssociationId(associationId)
             .build()
-        if (enabled) cdm.startObservingDevicePresence(request)
-        else cdm.stopObservingDevicePresence(request)
+        // framework 例外を構造化エラーへ変換する(observeByAddress と同じ理由)。
+        try {
+            if (enabled) cdm.startObservingDevicePresence(request)
+            else cdm.stopObservingDevicePresence(request)
+        } catch (e: Exception) {
+            throw toFlutterError("setDevicePresenceObservation", e)
+        }
+    }
+
+    /**
+     * CDM framework 例外を安定したコード付き [FlutterError] へ変換する。既に [FlutterError] なら
+     * そのまま返し、`SecurityException` は permissionDenied、その他は failed へ正規化する。
+     */
+    private fun toFlutterError(operation: String, e: Throwable): FlutterError = when (e) {
+        is FlutterError -> e
+        is SecurityException ->
+            bleError(BleErrorCode.PERMISSION_DENIED, "$operation denied: ${e.message ?: "security"}")
+        else ->
+            bleError(BleErrorCode.FAILED, "$operation failed: ${e.message ?: e.javaClass.simpleName}")
     }
 
     // --- request building ------------------------------------------------
