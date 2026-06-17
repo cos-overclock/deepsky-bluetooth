@@ -142,6 +142,8 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate {
     emitAdapterState(adapterState)
 
     guard central.state == .poweredOn else {
+      // CoreBluetooth stops scans when the adapter powers off/unavailable; keep local state in sync.
+      stopScan()
       return
     }
 
