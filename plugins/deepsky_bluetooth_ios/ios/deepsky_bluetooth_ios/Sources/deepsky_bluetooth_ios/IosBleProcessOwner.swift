@@ -282,8 +282,18 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
           "writeWithoutResponse", key: key, deviceId: target.deviceId,
           epoch: target.connectionEpoch,
           start: { [weak self] in
-            peripheral.writeValue(value.data, for: ch, type: .withoutResponse)
-            self?.writeCompletions.removeValue(forKey: key)?(.success(()))
+            guard let self else { return }
+            // enqueue 時点の backpressure 判定は、先行 op を待つ間に陳腐化しうる。
+            // 送信直前に再チェックし、buffer full なら withoutResponse を送らず bufferFull で
+            // 失敗完了する（Review guide §10 の backpressure 契約）。
+            let canSend = peripheral.canSendWriteWithoutResponse
+            if canSend {
+              peripheral.writeValue(value.data, for: ch, type: .withoutResponse)
+            }
+            let result: Result<Void, Error> = canSend
+              ? .success(())
+              : .failure(BleErrorMapping.bufferFull())
+            self.writeCompletions.removeValue(forKey: key)?(result)
             DispatchQueue.main.async { [weak self] in
               _ = self?.opQueue.complete(key: key)
             }
