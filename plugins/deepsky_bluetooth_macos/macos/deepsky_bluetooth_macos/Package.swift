@@ -31,6 +31,10 @@ let package = Package(
                 // the following instructions to add them:
                 // https://developer.apple.com/documentation/xcode/bundling-resources-with-a-swift-package
             ]
+        ),
+        .testTarget(
+            name: "deepsky_bluetooth_macosTests",
+            dependencies: ["deepsky_bluetooth_macos"]
         )
     ]
 )
