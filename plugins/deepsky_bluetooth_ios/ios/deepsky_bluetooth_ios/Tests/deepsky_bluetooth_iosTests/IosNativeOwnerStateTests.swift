@@ -154,25 +154,54 @@ final class IosNativeOwnerStateTests: XCTestCase {
   // MARK: - GattOperationQueue
 
   func testGattOperationQueueFirstEnqueueSucceeds() {
+    var started: [String] = []
     let queue = GattOperationQueue(timeout: 60) { _, _ in }
-    XCTAssertTrue(queue.enqueue(key: "D|1|1", deviceId: "D", epoch: 1))
+    XCTAssertTrue(queue.enqueue(key: "D|1|1", deviceId: "D", epoch: 1) {
+      started.append("D|1|1")
+    })
+    XCTAssertEqual(started, ["D|1|1"])
   }
 
   func testGattOperationQueueDuplicateEnqueueFails() {
     let queue = GattOperationQueue(timeout: 60) { _, _ in }
-    _ = queue.enqueue(key: "D|1|1", deviceId: "D", epoch: 1)
-    XCTAssertFalse(queue.enqueue(key: "D|1|1", deviceId: "D", epoch: 1))
+    _ = queue.enqueue(key: "D|1|1", deviceId: "D", epoch: 1) {}
+    XCTAssertFalse(queue.enqueue(key: "D|1|1", deviceId: "D", epoch: 1) {})
   }
 
-  func testGattOperationQueueDifferentKeysCoexist() {
+  func testGattOperationQueueDifferentKeysStartFifoPerDeviceEpoch() {
+    var started: [String] = []
     let queue = GattOperationQueue(timeout: 60) { _, _ in }
-    XCTAssertTrue(queue.enqueue(key: "D|1|1", deviceId: "D", epoch: 1))
-    XCTAssertTrue(queue.enqueue(key: "D|1|2", deviceId: "D", epoch: 1))
+    XCTAssertTrue(queue.enqueue(key: "D|1|1", deviceId: "D", epoch: 1) {
+      started.append("D|1|1")
+    })
+    XCTAssertTrue(queue.enqueue(key: "D|1|2", deviceId: "D", epoch: 1) {
+      started.append("D|1|2")
+    })
+
+    XCTAssertEqual(started, ["D|1|1"])
+    XCTAssertTrue(queue.complete(key: "D|1|1"))
+    XCTAssertEqual(started, ["D|1|1", "D|1|2"])
+  }
+
+  func testGattOperationQueueContainsActiveAndPendingKeys() {
+    let queue = GattOperationQueue(timeout: 60) { _, _ in }
+    _ = queue.enqueue(key: "D|1|1", deviceId: "D", epoch: 1) {}
+    _ = queue.enqueue(key: "D|1|2", deviceId: "D", epoch: 1) {}
+
+    XCTAssertTrue(queue.contains(key: "D|1|1"))
+    XCTAssertTrue(queue.contains(key: "D|1|2"))
+
+    _ = queue.complete(key: "D|1|1")
+    XCTAssertFalse(queue.contains(key: "D|1|1"))
+    XCTAssertTrue(queue.contains(key: "D|1|2"))
+
+    _ = queue.complete(key: "D|1|2")
+    XCTAssertFalse(queue.contains(key: "D|1|2"))
   }
 
   func testGattOperationQueueCompleteReturnsTrueIfInflight() {
     let queue = GattOperationQueue(timeout: 60) { _, _ in }
-    _ = queue.enqueue(key: "D|1|1", deviceId: "D", epoch: 1)
+    _ = queue.enqueue(key: "D|1|1", deviceId: "D", epoch: 1) {}
     XCTAssertTrue(queue.complete(key: "D|1|1"))
   }
 
@@ -183,25 +212,25 @@ final class IosNativeOwnerStateTests: XCTestCase {
 
   func testGattOperationQueueCompleteAllowsReenqueue() {
     let queue = GattOperationQueue(timeout: 60) { _, _ in }
-    _ = queue.enqueue(key: "D|1|1", deviceId: "D", epoch: 1)
+    _ = queue.enqueue(key: "D|1|1", deviceId: "D", epoch: 1) {}
     _ = queue.complete(key: "D|1|1")
-    XCTAssertTrue(queue.enqueue(key: "D|1|1", deviceId: "D", epoch: 1))
+    XCTAssertTrue(queue.enqueue(key: "D|1|1", deviceId: "D", epoch: 1) {})
   }
 
   func testGattOperationQueueCancelAllClearsInflight() {
     let queue = GattOperationQueue(timeout: 60) { _, _ in }
-    _ = queue.enqueue(key: "D|1|1", deviceId: "D", epoch: 1)
-    _ = queue.enqueue(key: "D|1|2", deviceId: "D", epoch: 1)
+    _ = queue.enqueue(key: "D|1|1", deviceId: "D", epoch: 1) {}
+    _ = queue.enqueue(key: "D|1|2", deviceId: "D", epoch: 1) {}
     queue.cancelAll(deviceId: "D", epoch: 1)
-    XCTAssertTrue(queue.enqueue(key: "D|1|1", deviceId: "D", epoch: 1))
-    XCTAssertTrue(queue.enqueue(key: "D|1|2", deviceId: "D", epoch: 1))
+    XCTAssertTrue(queue.enqueue(key: "D|1|1", deviceId: "D", epoch: 1) {})
+    XCTAssertTrue(queue.enqueue(key: "D|1|2", deviceId: "D", epoch: 1) {})
   }
 
   func testGattOperationQueueCancelAllDoesNotAffectOtherEpoch() {
     let queue = GattOperationQueue(timeout: 60) { _, _ in }
-    _ = queue.enqueue(key: "D|2|1", deviceId: "D", epoch: 2)
+    _ = queue.enqueue(key: "D|2|1", deviceId: "D", epoch: 2) {}
     queue.cancelAll(deviceId: "D", epoch: 1)
-    XCTAssertFalse(queue.enqueue(key: "D|2|1", deviceId: "D", epoch: 2))
+    XCTAssertFalse(queue.enqueue(key: "D|2|1", deviceId: "D", epoch: 2) {})
   }
 
   func testGattOperationQueueTimeoutFiresCallback() {
@@ -211,7 +240,7 @@ final class IosNativeOwnerStateTests: XCTestCase {
       XCTAssertEqual(epoch, 1)
       expectation.fulfill()
     }
-    _ = queue.enqueue(key: "D|1|1", deviceId: "D", epoch: 1)
+    _ = queue.enqueue(key: "D|1|1", deviceId: "D", epoch: 1) {}
     waitForExpectations(timeout: 1.0)
   }
 
@@ -221,7 +250,7 @@ final class IosNativeOwnerStateTests: XCTestCase {
     let queue = GattOperationQueue(timeout: 0.05) { _, _ in
       neverExpectation.fulfill()
     }
-    _ = queue.enqueue(key: "D|1|1", deviceId: "D", epoch: 1)
+    _ = queue.enqueue(key: "D|1|1", deviceId: "D", epoch: 1) {}
     _ = queue.complete(key: "D|1|1")
     waitForExpectations(timeout: 0.2)
   }
