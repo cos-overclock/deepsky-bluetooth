@@ -126,9 +126,45 @@ internal class SinkHandoverCoordinatorTest {
 
         val ack = coordinator.ackStateResync("ui", snapshot.snapshotId)
 
-        assertTrue(ack.bufferedEvents.isEmpty())
+        assertEquals(listOf(HandoverEvent.DeviceAppeared("11:11:11:11:11:11")), ack.bufferedEvents)
         assertEquals(1, ack.followUpSnapshot?.devices?.size)
         assertEquals(ConnectionStateMessage.DISCONNECTED, ack.followUpSnapshot!!.devices.single().state)
+    }
+
+    @Test
+    fun eventsBeforeSnapshotContinueToActiveSinkAndAreNotReplayedAfterAck() {
+        val coordinator = coordinator()
+        coordinator.attachCandidate("headless")
+        coordinator.ackStateResync("headless", coordinator.onDartReady("headless")!!.snapshotId)
+
+        coordinator.attachCandidate("ui")
+        val event = HandoverEvent.DeviceAppeared("AA:AA:AA:AA:AA:AA")
+
+        assertTrue(coordinator.recordEvent(event).deliverImmediately)
+        val snapshot = coordinator.onDartReady("ui")!!
+        val ack = coordinator.ackStateResync("ui", snapshot.snapshotId)
+
+        assertTrue(ack.bufferedEvents.isEmpty())
+    }
+
+    @Test
+    fun resetClearsActiveCandidateAndSnapshots() {
+        val coordinator = coordinator()
+        coordinator.recordConnectionState(
+            deviceId = "AA:BB:CC:DD:EE:FF",
+            connectionEpoch = 1,
+            state = ConnectionStateMessage.CONNECTED,
+            disconnectReason = null,
+        )
+        coordinator.attachCandidate("headless")
+        coordinator.ackStateResync("headless", coordinator.onDartReady("headless")!!.snapshotId)
+        coordinator.attachCandidate("ui")
+
+        coordinator.reset()
+
+        assertNull(coordinator.activeToken)
+        assertNull(coordinator.candidateToken)
+        assertTrue(coordinator.currentSnapshot().devices.isEmpty())
     }
 
     @Test

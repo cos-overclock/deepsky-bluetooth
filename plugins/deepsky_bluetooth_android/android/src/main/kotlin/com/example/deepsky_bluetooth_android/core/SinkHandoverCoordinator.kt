@@ -129,6 +129,15 @@ internal class SinkHandoverCoordinator(
     }
 
     @Synchronized
+    fun reset() {
+        activeToken = null
+        clearCandidate()
+        latestDevices.clear()
+        bufferedEvents.clear()
+        followUpSnapshotDirty = false
+    }
+
+    @Synchronized
     fun recordConnectionState(
         deviceId: String,
         connectionEpoch: Long,
@@ -160,7 +169,6 @@ internal class SinkHandoverCoordinator(
             )
         if (isAwaitingAck()) {
             followUpSnapshotDirty = true
-            if (bufferedEvents.size >= bufferCapacity) bufferedEvents.pollFirst()
         }
         return HandoverDelivery(deliverImmediately = shouldDeliverImmediately())
     }
@@ -193,7 +201,7 @@ internal class SinkHandoverCoordinator(
     @Synchronized
     fun recordEvent(event: HandoverEvent): HandoverDelivery {
         expireTimedOutHandover()
-        if (isInHandover()) {
+        if (isAwaitingAck()) {
             appendBuffered(event)
             return HandoverDelivery(deliverImmediately = false)
         }

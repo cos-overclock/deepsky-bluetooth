@@ -670,8 +670,7 @@ object BleProcessOwner {
             adapterReceiverRegistered = false
         }
         sinks.clear()
-        handover.detach(handover.activeToken ?: "")
-        handover.detach(handover.candidateToken ?: "")
+        handover.reset()
         activity = null
         companion = null
         // presence の保留 event と有効集合も明示破棄で手放す(dispose 後に古い presence が残らない)。
