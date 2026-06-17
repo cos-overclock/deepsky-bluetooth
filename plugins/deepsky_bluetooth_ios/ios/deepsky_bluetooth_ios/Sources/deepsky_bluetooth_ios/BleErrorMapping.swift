@@ -1,6 +1,7 @@
 import Foundation
 
 enum BleErrorCode {
+  static let permissionDenied = "permissionDenied"
   static let bluetoothOff = "bluetoothOff"
   static let bluetoothUnavailable = "bluetoothUnavailable"
   static let alreadyScanning = "alreadyScanning"
@@ -24,6 +25,10 @@ enum BleErrorMapping {
 
   static func bluetoothUnavailable(_ message: String) -> PigeonError {
     bleError(BleErrorCode.bluetoothUnavailable, message)
+  }
+
+  static func permissionDenied(_ message: String = "Bluetooth permission denied") -> PigeonError {
+    bleError(BleErrorCode.permissionDenied, message)
   }
 
   static func alreadyScanning() -> PigeonError {

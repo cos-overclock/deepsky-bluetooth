@@ -18,6 +18,7 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
   private var restoredNotifyHandles: [String: [Int64]] = [:]
   private var pendingResyncSnapshotId: String?
   private let restorationBuffer = RestorationEventBuffer<RestorationDeferredEvent>()
+  private let diagnostics = BleDiagnostics()
   private let handleRegistry = HandleRegistry()
   private var opQueue: GattOperationQueue!
   private var discoverCompletions: [String: (Result<[ServiceMessage], Error>) -> Void] = [:]
@@ -45,10 +46,12 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
   }
 
   func registerSink(engineToken: String, callbacks: BleCallbacksApi) {
+    diagnostics.sinkHandover(engineToken: engineToken, phase: "register")
     callbacksByEngine[engineToken] = callbacks
   }
 
   func unregisterSink(engineToken: String) {
+    diagnostics.sinkHandover(engineToken: engineToken, phase: "unregister")
     callbacksByEngine.removeValue(forKey: engineToken)
     if activeEngineToken == engineToken {
       activeEngineToken = nil
@@ -180,7 +183,7 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
       return
     }
     let key = discoveryKey(deviceId, connectionEpoch)
-    guard opQueue.enqueue(key: key, deviceId: deviceId, epoch: connectionEpoch) else {
+    guard enqueueOperation("discovery", key: key, deviceId: deviceId, epoch: connectionEpoch) else {
       completion(.failure(BleErrorMapping.failed("Service discovery already in progress")))
       return
     }
@@ -209,7 +212,7 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
         break
       }
       let key = charKey(target)
-      guard opQueue.enqueue(key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
+      guard enqueueOperation("read", key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
         completion(.failure(BleErrorMapping.failed("A read for this characteristic is already in flight")))
         return
       }
@@ -241,7 +244,7 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
         completion(.failure(BleErrorMapping.bufferFull()))
       case .proceedWithResponse:
         let key = charKey(target)
-        guard opQueue.enqueue(key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
+        guard enqueueOperation("write", key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
           completion(.failure(BleErrorMapping.failed("A write for this characteristic is already in flight")))
           return
         }
@@ -272,7 +275,7 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
         break
       }
       let key = charKey(target)
-      guard opQueue.enqueue(key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
+      guard enqueueOperation("notify", key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
         completion(.failure(BleErrorMapping.failed("A notify state change for this characteristic is already in flight")))
         return
       }
@@ -290,7 +293,7 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
       completion(.failure(e))
     case .success(let (peripheral, d)):
       let key = descKey(target)
-      guard opQueue.enqueue(key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
+      guard enqueueOperation("descriptorRead", key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
         completion(.failure(BleErrorMapping.failed("A descriptor read is already in flight")))
         return
       }
@@ -309,7 +312,7 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
       completion(.failure(e))
     case .success(let (peripheral, d)):
       let key = descKey(target)
-      guard opQueue.enqueue(key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
+      guard enqueueOperation("descriptorWrite", key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
         completion(.failure(BleErrorMapping.failed("A descriptor write is already in flight")))
         return
       }
@@ -346,7 +349,7 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
       return
     }
     let key = rssiKey(deviceId, connectionEpoch)
-    guard opQueue.enqueue(key: key, deviceId: deviceId, epoch: connectionEpoch) else {
+    guard enqueueOperation("rssi", key: key, deviceId: deviceId, epoch: connectionEpoch) else {
       completion(.failure(BleErrorMapping.failed("RSSI read already in flight")))
       return
     }
@@ -379,6 +382,7 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     let adapterState = adapterState(from: central.state)
     state.adapterStateChanged(adapterState)
     emitAdapterState(adapterState)
+    diagnostics.adapterState("\(adapterState)")
 
     guard central.state == .poweredOn else {
       return
@@ -397,6 +401,7 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
   ) {
     let restored = dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral] ?? []
     restoredDeviceIds = restored.map(\.identifier.uuidString)
+    diagnostics.restore(deviceIds: restoredDeviceIds)
     // 復元中に届く delegate event は snapshot/ack 後まで保持する（§13）。
     restorationBuffer.begin()
     for peripheral in restored {
@@ -465,6 +470,9 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     else {
       return
     }
+    // 接続が確立しないまま失敗した場合は常に connectFailed とする（§6）。
+    diagnostics.connection(deviceId: deviceId, epoch: epoch, state: "disconnected",
+                           reason: "connectFailed")
     emitConnectionState(
       deviceId: deviceId,
       epoch: epoch,
@@ -489,11 +497,15 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     failPendingOperations(deviceId: deviceId, error: BleErrorMapping.notConnected())
     handleRegistry.clear(deviceId: deviceId)
     clearRestoredCache(deviceId: deviceId)
+    // CBError から切断 reason を導く。圏外・切断は終端理由へ縮退させない（§6）。
+    let reason = ManagerStateMapping.disconnectReason(for: connectionFailure(from: error))
+    diagnostics.connection(deviceId: deviceId, epoch: epoch, state: "disconnected",
+                           reason: "\(reason)")
     emitConnectionState(
       deviceId: deviceId,
       epoch: epoch,
       state: .disconnected,
-      reason: error == nil ? .userRequested : .connectionLost
+      reason: reason
     )
   }
 
@@ -751,6 +763,18 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     "\(deviceId)|\(epoch)|discovery"
   }
 
+  /// FIFO operation queue への投入を診断付きで行う。enqueue 成功時に os_log へ
+  /// "queued" を記録し、GATT queue を Console.app から観測できるようにする。
+  private func enqueueOperation(
+    _ kind: String, key: String, deviceId: String, epoch: Int64
+  ) -> Bool {
+    let enqueued = opQueue.enqueue(key: key, deviceId: deviceId, epoch: epoch)
+    if enqueued {
+      diagnostics.operation(kind, deviceId: deviceId, epoch: epoch, phase: "queued")
+    }
+    return enqueued
+  }
+
   private func capability(of ch: CBCharacteristic) -> CharacteristicCapability {
     CharacteristicCapability(
       canRead: ch.properties.contains(.read),
@@ -801,12 +825,18 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
   private func rebuildHandles(peripheral: CBPeripheral) -> [ServiceMessage] {
     let deviceId = peripheral.identifier.uuidString
     handleRegistry.clear(deviceId: deviceId)
+    let epoch = state.currentEpoch(deviceId: deviceId) ?? 0
     return (peripheral.services ?? []).map { service in
       let svcHandle = handleRegistry.allocate(service, kind: .service, deviceId: deviceId)
+      diagnostics.handle(deviceId: deviceId, epoch: epoch, handle: svcHandle, attribute: "service")
       let characteristics = (service.characteristics ?? []).map { ch -> CharacteristicMessage in
         let charHandle = handleRegistry.allocate(ch, kind: .characteristic, deviceId: deviceId)
+        diagnostics.handle(deviceId: deviceId, epoch: epoch, handle: charHandle,
+                           attribute: "characteristic")
         let descriptors = (ch.descriptors ?? []).map { d -> DescriptorMessage in
           let descHandle = handleRegistry.allocate(d, kind: .descriptor, deviceId: deviceId)
+          diagnostics.handle(deviceId: deviceId, epoch: epoch, handle: descHandle,
+                             attribute: "descriptor")
           return DescriptorMessage(handle: descHandle, uuid: fullUuid(d.uuid))
         }
         return CharacteristicMessage(
@@ -906,18 +936,11 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     guard let central else {
       throw BleErrorMapping.bluetoothUnavailable("Central manager unavailable")
     }
-    switch central.state {
-    case .poweredOn:
-      return central
-    case .poweredOff:
-      throw BleErrorMapping.bluetoothOff()
-    case .unsupported, .unauthorized:
-      throw BleErrorMapping.bluetoothUnavailable("Bluetooth LE unavailable")
-    case .unknown, .resetting:
-      throw BleErrorMapping.bluetoothUnavailable("Bluetooth is not ready")
-    @unknown default:
-      throw BleErrorMapping.bluetoothUnavailable("Unknown Bluetooth state")
+    // unauthorized / poweredOff / unsupported を区別したガード（§6）。
+    if let guardError = ManagerStateMapping.connectGuardError(for: bleManagerState(central.state)) {
+      throw bleError(guardError.code, guardError.message)
     }
+    return central
   }
 
   private func peripheral(for deviceId: String, central: CBCentralManager) -> CBPeripheral? {
@@ -1006,18 +1029,7 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
   }
 
   private func adapterState(from state: CBManagerState) -> AdapterStateMessage {
-    switch state {
-    case .poweredOn:
-      return .poweredOn
-    case .poweredOff:
-      return .poweredOff
-    case .unsupported, .unauthorized:
-      return .unavailable
-    case .unknown, .resetting:
-      return .unavailable
-    @unknown default:
-      return .unavailable
-    }
+    ManagerStateMapping.adapterState(for: bleManagerState(state))
   }
 
   private func connectionState(from state: CBPeripheralState) -> ConnectionStateMessage {
@@ -1134,6 +1146,32 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
         uuid.uuidString.caseInsensitiveCompare(filter.serviceUuid) == .orderedSame &&
           data.starts(with: filter.data.data)
       }
+    }
+  }
+
+  /// CBManagerState を CoreBluetooth 非依存の純粋判断へ橋渡しする。
+  private func bleManagerState(_ state: CBManagerState) -> BleManagerState {
+    switch state {
+    case .poweredOn: return .poweredOn
+    case .poweredOff: return .poweredOff
+    case .unsupported: return .unsupported
+    case .unauthorized: return .unauthorized
+    case .resetting: return .resetting
+    case .unknown: return .unknown
+    @unknown default: return .unknown
+    }
+  }
+
+  /// CBError.Code を CoreBluetooth 非依存の失敗種別へ橋渡しする。
+  private func connectionFailure(from error: Error?) -> BleConnectionFailure {
+    guard let error else { return .none }
+    guard let cbError = error as? CBError else { return .other }
+    switch cbError.code {
+    case .connectionTimeout: return .timeout
+    case .peripheralDisconnected: return .peripheralDisconnected
+    case .connectionFailed: return .connectionFailed
+    case .connectionLimitReached: return .limitReached
+    default: return .other
     }
   }
 }
