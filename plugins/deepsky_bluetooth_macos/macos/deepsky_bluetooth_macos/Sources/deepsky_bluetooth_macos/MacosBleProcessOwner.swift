@@ -246,8 +246,9 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripher
   }
 
   /// writeWithResponse は capability を満たすと FIFO queue へ流す。writeWithoutResponse は
-  /// peripheral.canSendWriteWithoutResponse が false のとき backpressure を bufferFull へ
-  /// mapping し、送信可能なら queue 経由で即時完了する。
+  /// backpressure（canSendWriteWithoutResponse == false）を bufferFull へ mapping する。
+  /// enqueue 時点の判定は先行 op を待つ間に陳腐化しうるため、送信直前（start クロージャ内）
+  /// でも再チェックし、その時点で送信不可なら bufferFull で失敗完了する。
   func writeCharacteristic(
     target: CharacteristicTargetMessage,
     value: FlutterStandardTypedData,
@@ -294,8 +295,18 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripher
         guard opQueue.enqueue(
           key: key, deviceId: target.deviceId, epoch: target.connectionEpoch,
           start: { [weak self] in
-            peripheral.writeValue(value.data, for: ch, type: .withoutResponse)
-            self?.writeCompletions.removeValue(forKey: key)?(.success(()))
+            guard let self else { return }
+            // enqueue 時点の backpressure 判定は、先行 op を待つ間に陳腐化しうる。
+            // 送信直前に再チェックし、buffer full なら withoutResponse を送らず bufferFull で
+            // 失敗完了する（§10 の backpressure 契約）。
+            let canSend = peripheral.canSendWriteWithoutResponse
+            if canSend {
+              peripheral.writeValue(value.data, for: ch, type: .withoutResponse)
+            }
+            let result: Result<Void, Error> = canSend
+              ? .success(())
+              : .failure(BleErrorMapping.bufferFull())
+            self.writeCompletions.removeValue(forKey: key)?(result)
             DispatchQueue.main.async { [weak self] in
               _ = self?.opQueue.complete(key: key)
             }
