@@ -183,6 +183,22 @@ final class IosNativeOwnerStateTests: XCTestCase {
     XCTAssertEqual(started, ["D|1|1", "D|1|2"])
   }
 
+  func testGattOperationQueueContainsActiveAndPendingKeys() {
+    let queue = GattOperationQueue(timeout: 60) { _, _ in }
+    _ = queue.enqueue(key: "D|1|1", deviceId: "D", epoch: 1) {}
+    _ = queue.enqueue(key: "D|1|2", deviceId: "D", epoch: 1) {}
+
+    XCTAssertTrue(queue.contains(key: "D|1|1"))
+    XCTAssertTrue(queue.contains(key: "D|1|2"))
+
+    _ = queue.complete(key: "D|1|1")
+    XCTAssertFalse(queue.contains(key: "D|1|1"))
+    XCTAssertTrue(queue.contains(key: "D|1|2"))
+
+    _ = queue.complete(key: "D|1|2")
+    XCTAssertFalse(queue.contains(key: "D|1|2"))
+  }
+
   func testGattOperationQueueCompleteReturnsTrueIfInflight() {
     let queue = GattOperationQueue(timeout: 60) { _, _ in }
     _ = queue.enqueue(key: "D|1|1", deviceId: "D", epoch: 1) {}
