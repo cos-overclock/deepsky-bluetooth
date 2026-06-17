@@ -8,6 +8,9 @@ enum BleErrorCode {
   static let notConnected = "notConnected"
   static let notSupported = "notSupported"
   static let failed = "failed"
+  static let readAmbiguousWhileNotifying = "readAmbiguousWhileNotifying"
+  static let bufferFull = "bufferFull"
+  static let operationTimeout = "operationTimeout"
 }
 
 func bleError(_ code: String, _ message: String) -> PigeonError {
@@ -41,5 +44,18 @@ enum BleErrorMapping {
 
   static func failed(_ message: String) -> PigeonError {
     bleError(BleErrorCode.failed, message)
+  }
+
+  static func readAmbiguousWhileNotifying() -> PigeonError {
+    bleError(BleErrorCode.readAmbiguousWhileNotifying,
+             "read(strictRead: true) is ambiguous while notifying")
+  }
+
+  static func bufferFull() -> PigeonError {
+    bleError(BleErrorCode.bufferFull, "Write without response buffer is full")
+  }
+
+  static func operationTimeout() -> PigeonError {
+    bleError(BleErrorCode.operationTimeout, "GATT operation timed out")
   }
 }
