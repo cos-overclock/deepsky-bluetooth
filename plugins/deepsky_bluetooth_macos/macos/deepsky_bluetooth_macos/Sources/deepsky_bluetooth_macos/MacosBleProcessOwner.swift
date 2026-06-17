@@ -4,10 +4,12 @@ import FlutterMacOS
 import Foundation
 
 /// macOS の CBCentralManager owner。
-/// Issue #35 の範囲: scan/filter・connect/cancel・adapter state・epoch 採番と
-/// callback guard・foreground 再接続に必要な生 event の公開。
-/// GATT discovery / read / notify / FIFO queue は後続 Issue (#36-#38) で追加する。
-final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate {
+/// Issue #35: scan/filter・connect/cancel・adapter state・epoch 採番と callback guard。
+/// Issue #36: GATT discovery・HandleRegistry・FIFO operation queue・timeout 接続破棄と
+/// read/write/notify/descriptor/RSSI の queue 接続。
+/// read/notify 共通 callback の契約・strictRead・backpressure・background 拒否は #37、
+/// Observer・error mapping・plugin/Pigeon 配線は #38 で追加する。
+final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
   static let shared = MacosBleProcessOwner()
 
   private let state = MacosNativeOwnerState()
@@ -17,9 +19,22 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate {
   private var scanFilter: ScanFilterMessage?
   private var isScanning = false
   private var peripheralsByDeviceId: [String: CBPeripheral] = [:]
+  private let handleRegistry = HandleRegistry()
+  private var opQueue: GattOperationQueue!
+  private var discoverCompletions: [String: (Result<[ServiceMessage], Error>) -> Void] = [:]
+  private var pendingDiscovery: [String: Int] = [:]
+  private var readCompletions: [String: (Result<FlutterStandardTypedData, Error>) -> Void] = [:]
+  private var writeCompletions: [String: (Result<Void, Error>) -> Void] = [:]
+  private var notifyCompletions: [String: (Result<Void, Error>) -> Void] = [:]
+  private var descriptorReadCompletions: [String: (Result<FlutterStandardTypedData, Error>) -> Void] = [:]
+  private var descriptorWriteCompletions: [String: (Result<Void, Error>) -> Void] = [:]
+  private var rssiCompletions: [String: (Result<Int64, Error>) -> Void] = [:]
 
   private override init() {
     super.init()
+    opQueue = GattOperationQueue(onTimeout: { [weak self] deviceId, epoch in
+      self?.handleOperationTimeout(deviceId: deviceId, epoch: epoch)
+    })
   }
 
   // MARK: - Sink / lifecycle
@@ -93,6 +108,7 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate {
     }
 
     peripheralsByDeviceId[deviceId] = peripheral
+    peripheral.delegate = self
     // poweredOn でないときは pending のまま据え置き、centralManagerDidUpdateState で再開する。
     if central.state == .poweredOn {
       central.connect(peripheral, options: nil)
@@ -109,6 +125,9 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate {
       completion(.failure(BleErrorMapping.notConnected()))
       return
     }
+    opQueue.cancelAll(deviceId: deviceId, epoch: connectionEpoch)
+    failPendingOperations(deviceId: deviceId, error: BleErrorMapping.notConnected())
+    handleRegistry.clear(deviceId: deviceId)
     if let peripheral = peripheralsByDeviceId.removeValue(forKey: deviceId) {
       central?.cancelPeripheralConnection(peripheral)
     }
@@ -126,12 +145,262 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate {
     for (deviceId, peripheral) in peripheralsByDeviceId {
       if let epoch = state.currentEpoch(deviceId: deviceId) {
         _ = state.disconnectRequested(deviceId: deviceId, epoch: epoch)
+        opQueue.cancelAll(deviceId: deviceId, epoch: epoch)
       }
+      failPendingOperations(deviceId: deviceId, error: BleErrorMapping.notConnected())
+      handleRegistry.clear(deviceId: deviceId)
       central?.cancelPeripheralConnection(peripheral)
     }
     peripheralsByDeviceId.removeAll()
     callbacksByEngine.removeAll()
     activeEngineToken = nil
+  }
+
+  // MARK: - GATT operations
+
+  func discoverServices(
+    deviceId: String,
+    connectionEpoch: Int64,
+    completion: @escaping (Result<[ServiceMessage], Error>) -> Void
+  ) {
+    guard state.isCurrent(deviceId: deviceId, epoch: connectionEpoch),
+          let peripheral = peripheralsByDeviceId[deviceId],
+          peripheral.state == .connected
+    else {
+      completion(.failure(BleErrorMapping.notConnected()))
+      return
+    }
+    let key = discoveryKey(deviceId, connectionEpoch)
+    guard !opQueue.contains(key: key) else {
+      completion(.failure(BleErrorMapping.failed("Service discovery already in progress")))
+      return
+    }
+    discoverCompletions[deviceId] = completion
+    guard opQueue.enqueue(
+      key: key, deviceId: deviceId, epoch: connectionEpoch,
+      start: { peripheral.discoverServices(nil) }
+    ) else {
+      discoverCompletions.removeValue(forKey: deviceId)
+      completion(.failure(BleErrorMapping.failed("Service discovery already in progress")))
+      return
+    }
+  }
+
+  /// strictRead による read/notify 曖昧性の判定と、通常 read を戻り値と values の
+  /// 両系統へ配送する read/notify 共通契約は #37 で実装する。#36 では capability を
+  /// 満たす read を FIFO queue へ流し、戻り値だけを返す。
+  func readCharacteristic(
+    target: CharacteristicTargetMessage,
+    strictRead: Bool,
+    completion: @escaping (Result<FlutterStandardTypedData, Error>) -> Void
+  ) {
+    switch findCharacteristic(target) {
+    case .failure(let e):
+      completion(.failure(e))
+    case .success(let (peripheral, ch)):
+      guard ch.properties.contains(.read) else {
+        completion(.failure(BleErrorMapping.notSupported("Read not supported")))
+        return
+      }
+      let key = charKey(target)
+      guard !opQueue.contains(key: key) else {
+        completion(.failure(BleErrorMapping.failed("A read for this characteristic is already in flight")))
+        return
+      }
+      readCompletions[key] = completion
+      guard opQueue.enqueue(
+        key: key, deviceId: target.deviceId, epoch: target.connectionEpoch,
+        start: { peripheral.readValue(for: ch) }
+      ) else {
+        readCompletions.removeValue(forKey: key)
+        completion(.failure(BleErrorMapping.failed("A read for this characteristic is already in flight")))
+        return
+      }
+    }
+  }
+
+  /// writeWithoutResponse の backpressure を buffer-full へ mapping する処理は #37 で実装する。
+  func writeCharacteristic(
+    target: CharacteristicTargetMessage,
+    value: FlutterStandardTypedData,
+    withResponse: Bool,
+    completion: @escaping (Result<Void, Error>) -> Void
+  ) {
+    switch findCharacteristic(target) {
+    case .failure(let e):
+      completion(.failure(e))
+    case .success(let (peripheral, ch)):
+      if withResponse {
+        guard ch.properties.contains(.write) else {
+          completion(.failure(BleErrorMapping.notSupported("Write with response not supported")))
+          return
+        }
+        let key = charKey(target)
+        guard !opQueue.contains(key: key) else {
+          completion(.failure(BleErrorMapping.failed("A write for this characteristic is already in flight")))
+          return
+        }
+        writeCompletions[key] = completion
+        guard opQueue.enqueue(
+          key: key, deviceId: target.deviceId, epoch: target.connectionEpoch,
+          start: { peripheral.writeValue(value.data, for: ch, type: .withResponse) }
+        ) else {
+          writeCompletions.removeValue(forKey: key)
+          completion(.failure(BleErrorMapping.failed("A write for this characteristic is already in flight")))
+          return
+        }
+      } else {
+        guard ch.properties.contains(.writeWithoutResponse) else {
+          completion(.failure(BleErrorMapping.notSupported("Write without response not supported")))
+          return
+        }
+        let key = charKey(target)
+        guard !opQueue.contains(key: key) else {
+          completion(.failure(BleErrorMapping.failed("A write for this characteristic is already in flight")))
+          return
+        }
+        writeCompletions[key] = completion
+        guard opQueue.enqueue(
+          key: key, deviceId: target.deviceId, epoch: target.connectionEpoch,
+          start: { [weak self] in
+            peripheral.writeValue(value.data, for: ch, type: .withoutResponse)
+            self?.writeCompletions.removeValue(forKey: key)?(.success(()))
+            DispatchQueue.main.async { [weak self] in
+              _ = self?.opQueue.complete(key: key)
+            }
+          }
+        ) else {
+          writeCompletions.removeValue(forKey: key)
+          completion(.failure(BleErrorMapping.failed("A write for this characteristic is already in flight")))
+          return
+        }
+      }
+    }
+  }
+
+  func setNotify(
+    target: CharacteristicTargetMessage,
+    type: NotifyTypeMessage,
+    completion: @escaping (Result<Void, Error>) -> Void
+  ) {
+    switch findCharacteristic(target) {
+    case .failure(let e):
+      completion(.failure(e))
+    case .success(let (peripheral, ch)):
+      let enabled = type != .disable
+      guard ch.properties.contains(.notify) || ch.properties.contains(.indicate) else {
+        completion(.failure(BleErrorMapping.notSupported("Notify/Indicate not supported")))
+        return
+      }
+      let key = charKey(target)
+      guard !opQueue.contains(key: key) else {
+        completion(.failure(BleErrorMapping.failed("A notify state change for this characteristic is already in flight")))
+        return
+      }
+      notifyCompletions[key] = completion
+      guard opQueue.enqueue(
+        key: key, deviceId: target.deviceId, epoch: target.connectionEpoch,
+        start: { peripheral.setNotifyValue(enabled, for: ch) }
+      ) else {
+        notifyCompletions.removeValue(forKey: key)
+        completion(.failure(BleErrorMapping.failed("A notify state change for this characteristic is already in flight")))
+        return
+      }
+    }
+  }
+
+  func readDescriptor(
+    target: DescriptorTargetMessage,
+    completion: @escaping (Result<FlutterStandardTypedData, Error>) -> Void
+  ) {
+    switch findDescriptor(target) {
+    case .failure(let e):
+      completion(.failure(e))
+    case .success(let (peripheral, d)):
+      let key = descKey(target)
+      guard !opQueue.contains(key: key) else {
+        completion(.failure(BleErrorMapping.failed("A descriptor read is already in flight")))
+        return
+      }
+      descriptorReadCompletions[key] = completion
+      guard opQueue.enqueue(
+        key: key, deviceId: target.deviceId, epoch: target.connectionEpoch,
+        start: { peripheral.readValue(for: d) }
+      ) else {
+        descriptorReadCompletions.removeValue(forKey: key)
+        completion(.failure(BleErrorMapping.failed("A descriptor read is already in flight")))
+        return
+      }
+    }
+  }
+
+  func writeDescriptor(
+    target: DescriptorTargetMessage,
+    value: FlutterStandardTypedData,
+    completion: @escaping (Result<Void, Error>) -> Void
+  ) {
+    switch findDescriptor(target) {
+    case .failure(let e):
+      completion(.failure(e))
+    case .success(let (peripheral, d)):
+      let key = descKey(target)
+      guard !opQueue.contains(key: key) else {
+        completion(.failure(BleErrorMapping.failed("A descriptor write is already in flight")))
+        return
+      }
+      descriptorWriteCompletions[key] = completion
+      guard opQueue.enqueue(
+        key: key, deviceId: target.deviceId, epoch: target.connectionEpoch,
+        start: { peripheral.writeValue(value.data, for: d) }
+      ) else {
+        descriptorWriteCompletions.removeValue(forKey: key)
+        completion(.failure(BleErrorMapping.failed("A descriptor write is already in flight")))
+        return
+      }
+    }
+  }
+
+  func getMtu(
+    deviceId: String,
+    connectionEpoch: Int64,
+    completion: @escaping (Result<Int64, Error>) -> Void
+  ) {
+    guard state.isCurrent(deviceId: deviceId, epoch: connectionEpoch),
+          let peripheral = peripheralsByDeviceId[deviceId],
+          peripheral.state == .connected
+    else {
+      completion(.failure(BleErrorMapping.notConnected()))
+      return
+    }
+    completion(.success(Int64(peripheral.maximumWriteValueLength(for: .withResponse) + 3)))
+  }
+
+  func readRssi(
+    deviceId: String,
+    connectionEpoch: Int64,
+    completion: @escaping (Result<Int64, Error>) -> Void
+  ) {
+    guard state.isCurrent(deviceId: deviceId, epoch: connectionEpoch),
+          let peripheral = peripheralsByDeviceId[deviceId],
+          peripheral.state == .connected
+    else {
+      completion(.failure(BleErrorMapping.notConnected()))
+      return
+    }
+    let key = rssiKey(deviceId, connectionEpoch)
+    guard !opQueue.contains(key: key) else {
+      completion(.failure(BleErrorMapping.failed("RSSI read already in flight")))
+      return
+    }
+    rssiCompletions[key] = completion
+    guard opQueue.enqueue(
+      key: key, deviceId: deviceId, epoch: connectionEpoch,
+      start: { peripheral.readRSSI() }
+    ) else {
+      rssiCompletions.removeValue(forKey: key)
+      completion(.failure(BleErrorMapping.failed("RSSI read already in flight")))
+      return
+    }
   }
 
   // MARK: - CBCentralManagerDelegate
@@ -226,6 +495,9 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate {
     else {
       return
     }
+    opQueue.cancelAll(deviceId: deviceId, epoch: epoch)
+    failPendingOperations(deviceId: deviceId, error: BleErrorMapping.notConnected())
+    handleRegistry.clear(deviceId: deviceId)
     // CBError から切断 reason を導く。圏外・切断は終端理由へ縮退させない（§6）。
     let reason = ManagerStateMapping.disconnectReason(for: connectionFailure(from: error))
     emitConnectionState(
@@ -233,6 +505,328 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate {
       epoch: epoch,
       state: .disconnected,
       reason: reason
+    )
+  }
+
+  // MARK: - CBPeripheralDelegate (discovery)
+
+  func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
+    let deviceId = peripheral.identifier.uuidString
+    guard discoverCompletions[deviceId] != nil else { return }
+    if let error {
+      finishDiscoveryWithFailure(deviceId: deviceId, error: error)
+      return
+    }
+    let services = peripheral.services ?? []
+    if services.isEmpty {
+      if let epoch = state.currentEpoch(deviceId: deviceId) {
+        _ = opQueue.complete(key: discoveryKey(deviceId, epoch))
+      }
+      discoverCompletions.removeValue(forKey: deviceId)?(.success([]))
+      return
+    }
+    pendingDiscovery[deviceId] = services.count
+    services.forEach { peripheral.discoverCharacteristics(nil, for: $0) }
+  }
+
+  func peripheral(
+    _ peripheral: CBPeripheral,
+    didDiscoverCharacteristicsFor service: CBService,
+    error: Error?
+  ) {
+    let deviceId = peripheral.identifier.uuidString
+    guard discoverCompletions[deviceId] != nil else { return }
+    if let error {
+      finishDiscoveryWithFailure(deviceId: deviceId, error: error)
+      return
+    }
+    let chars = service.characteristics ?? []
+    pendingDiscovery[deviceId, default: 0] += chars.count - 1
+    chars.forEach { peripheral.discoverDescriptors(for: $0) }
+    finishDiscoveryIfDone(peripheral, deviceId: deviceId)
+  }
+
+  func peripheral(
+    _ peripheral: CBPeripheral,
+    didDiscoverDescriptorsFor characteristic: CBCharacteristic,
+    error: Error?
+  ) {
+    let deviceId = peripheral.identifier.uuidString
+    guard discoverCompletions[deviceId] != nil else { return }
+    if let error {
+      finishDiscoveryWithFailure(deviceId: deviceId, error: error)
+      return
+    }
+    pendingDiscovery[deviceId, default: 0] -= 1
+    finishDiscoveryIfDone(peripheral, deviceId: deviceId)
+  }
+
+  private func finishDiscoveryWithFailure(deviceId: String, error: Error) {
+    if let epoch = state.currentEpoch(deviceId: deviceId) {
+      _ = opQueue.complete(key: discoveryKey(deviceId, epoch))
+    }
+    pendingDiscovery.removeValue(forKey: deviceId)
+    discoverCompletions.removeValue(forKey: deviceId)?(
+      .failure(BleErrorMapping.failed(error.localizedDescription)))
+  }
+
+  private func finishDiscoveryIfDone(_ peripheral: CBPeripheral, deviceId: String) {
+    guard pendingDiscovery[deviceId] == 0,
+          let epoch = state.currentEpoch(deviceId: deviceId),
+          let completion = discoverCompletions.removeValue(forKey: deviceId)
+    else { return }
+    pendingDiscovery.removeValue(forKey: deviceId)
+    let services = rebuildHandles(peripheral: peripheral)
+    _ = opQueue.complete(key: discoveryKey(deviceId, epoch))
+    completion(.success(services))
+  }
+
+  // MARK: - CBPeripheralDelegate (GATT operations)
+
+  func peripheral(
+    _ peripheral: CBPeripheral,
+    didUpdateValueFor characteristic: CBCharacteristic,
+    error: Error?
+  ) {
+    guard let key = charKey(peripheral, characteristic) else { return }
+    // pending read がある更新だけを read 戻り値として完了させる。
+    // pending read が無い更新（notify）の values 配送と read/notify 共通契約は #37 で実装する。
+    guard let completion = readCompletions.removeValue(forKey: key) else { return }
+    _ = opQueue.complete(key: key)
+    if let error {
+      completion(.failure(BleErrorMapping.failed(error.localizedDescription)))
+    } else {
+      completion(.success(FlutterStandardTypedData(bytes: characteristic.value ?? Data())))
+    }
+  }
+
+  func peripheral(
+    _ peripheral: CBPeripheral,
+    didWriteValueFor characteristic: CBCharacteristic,
+    error: Error?
+  ) {
+    guard let key = charKey(peripheral, characteristic),
+          let completion = writeCompletions.removeValue(forKey: key) else { return }
+    _ = opQueue.complete(key: key)
+    if let error {
+      completion(.failure(BleErrorMapping.failed(error.localizedDescription)))
+    } else {
+      completion(.success(()))
+    }
+  }
+
+  func peripheral(
+    _ peripheral: CBPeripheral,
+    didUpdateNotificationStateFor characteristic: CBCharacteristic,
+    error: Error?
+  ) {
+    guard let key = charKey(peripheral, characteristic),
+          let completion = notifyCompletions.removeValue(forKey: key) else { return }
+    _ = opQueue.complete(key: key)
+    if let error {
+      completion(.failure(BleErrorMapping.failed(error.localizedDescription)))
+    } else {
+      completion(.success(()))
+    }
+  }
+
+  func peripheral(
+    _ peripheral: CBPeripheral,
+    didUpdateValueFor descriptor: CBDescriptor,
+    error: Error?
+  ) {
+    guard let key = descKey(peripheral, descriptor),
+          let completion = descriptorReadCompletions.removeValue(forKey: key) else { return }
+    _ = opQueue.complete(key: key)
+    if let error {
+      completion(.failure(BleErrorMapping.failed(error.localizedDescription)))
+    } else {
+      let data: Data
+      if let bytes = descriptor.value as? Data {
+        data = bytes
+      } else if let string = descriptor.value as? String {
+        data = Data(string.utf8)
+      } else {
+        data = Data()
+      }
+      completion(.success(FlutterStandardTypedData(bytes: data)))
+    }
+  }
+
+  func peripheral(
+    _ peripheral: CBPeripheral,
+    didWriteValueFor descriptor: CBDescriptor,
+    error: Error?
+  ) {
+    guard let key = descKey(peripheral, descriptor),
+          let completion = descriptorWriteCompletions.removeValue(forKey: key) else { return }
+    _ = opQueue.complete(key: key)
+    if let error {
+      completion(.failure(BleErrorMapping.failed(error.localizedDescription)))
+    } else {
+      completion(.success(()))
+    }
+  }
+
+  func peripheral(_ peripheral: CBPeripheral, didReadRSSI RSSI: NSNumber, error: Error?) {
+    let deviceId = peripheral.identifier.uuidString
+    guard let epoch = state.currentEpoch(deviceId: deviceId) else { return }
+    let key = rssiKey(deviceId, epoch)
+    guard let completion = rssiCompletions.removeValue(forKey: key) else { return }
+    _ = opQueue.complete(key: key)
+    if let error {
+      completion(.failure(BleErrorMapping.failed(error.localizedDescription)))
+    } else {
+      completion(.success(RSSI.int64Value))
+    }
+  }
+
+  // MARK: - GATT helpers
+
+  private func fullUuid(_ uuid: CBUUID) -> String {
+    let s = uuid.uuidString.lowercased()
+    switch s.count {
+    case 4: return "0000\(s)-0000-1000-8000-00805f9b34fb"
+    case 8: return "\(s)-0000-1000-8000-00805f9b34fb"
+    default: return s
+    }
+  }
+
+  private func charKey(_ target: CharacteristicTargetMessage) -> String {
+    "\(target.deviceId)|\(target.connectionEpoch)|\(target.characteristicHandle)"
+  }
+
+  private func charKey(_ peripheral: CBPeripheral, _ ch: CBCharacteristic) -> String? {
+    let deviceId = peripheral.identifier.uuidString
+    guard let epoch = state.currentEpoch(deviceId: deviceId),
+          let handle = handleRegistry.handle(for: ch) else { return nil }
+    return "\(deviceId)|\(epoch)|\(handle)"
+  }
+
+  private func descKey(_ target: DescriptorTargetMessage) -> String {
+    "\(target.deviceId)|\(target.connectionEpoch)|\(target.characteristicHandle)|\(target.descriptorHandle)"
+  }
+
+  private func descKey(_ peripheral: CBPeripheral, _ d: CBDescriptor) -> String? {
+    guard let ch = d.characteristic else { return nil }
+    let deviceId = peripheral.identifier.uuidString
+    guard let epoch = state.currentEpoch(deviceId: deviceId),
+          let charHandle = handleRegistry.handle(for: ch),
+          let descHandle = handleRegistry.handle(for: d) else { return nil }
+    return "\(deviceId)|\(epoch)|\(charHandle)|\(descHandle)"
+  }
+
+  private func rssiKey(_ deviceId: String, _ epoch: Int64) -> String {
+    "\(deviceId)|\(epoch)|rssi"
+  }
+
+  private func discoveryKey(_ deviceId: String, _ epoch: Int64) -> String {
+    "\(deviceId)|\(epoch)|discovery"
+  }
+
+  private func findCharacteristic(
+    _ target: CharacteristicTargetMessage
+  ) -> Result<(CBPeripheral, CBCharacteristic), Error> {
+    guard state.isCurrent(deviceId: target.deviceId, epoch: target.connectionEpoch),
+          let peripheral = peripheralsByDeviceId[target.deviceId],
+          peripheral.state == .connected
+    else {
+      return .failure(BleErrorMapping.notConnected())
+    }
+    guard let ch = handleRegistry.characteristic(
+      handle: target.characteristicHandle, deviceId: target.deviceId) as? CBCharacteristic
+    else {
+      return .failure(BleErrorMapping.notFound(
+        "Characteristic handle \(target.characteristicHandle) not found"))
+    }
+    return .success((peripheral, ch))
+  }
+
+  private func findDescriptor(
+    _ target: DescriptorTargetMessage
+  ) -> Result<(CBPeripheral, CBDescriptor), Error> {
+    guard state.isCurrent(deviceId: target.deviceId, epoch: target.connectionEpoch),
+          let peripheral = peripheralsByDeviceId[target.deviceId],
+          peripheral.state == .connected
+    else {
+      return .failure(BleErrorMapping.notConnected())
+    }
+    guard let d = handleRegistry.descriptor(
+      handle: target.descriptorHandle, deviceId: target.deviceId) as? CBDescriptor
+    else {
+      return .failure(BleErrorMapping.notFound(
+        "Descriptor handle \(target.descriptorHandle) not found"))
+    }
+    return .success((peripheral, d))
+  }
+
+  /// 探索結果から service/characteristic/descriptor へ handle を採番し直し、ServiceMessage 木を返す。
+  private func rebuildHandles(peripheral: CBPeripheral) -> [ServiceMessage] {
+    let deviceId = peripheral.identifier.uuidString
+    handleRegistry.clear(deviceId: deviceId)
+    return (peripheral.services ?? []).map { service in
+      let svcHandle = handleRegistry.allocate(service, kind: .service, deviceId: deviceId)
+      let characteristics = (service.characteristics ?? []).map { ch -> CharacteristicMessage in
+        let charHandle = handleRegistry.allocate(ch, kind: .characteristic, deviceId: deviceId)
+        let descriptors = (ch.descriptors ?? []).map { d -> DescriptorMessage in
+          let descHandle = handleRegistry.allocate(d, kind: .descriptor, deviceId: deviceId)
+          return DescriptorMessage(handle: descHandle, uuid: fullUuid(d.uuid))
+        }
+        return CharacteristicMessage(
+          handle: charHandle,
+          serviceHandle: svcHandle,
+          uuid: fullUuid(ch.uuid),
+          canRead: ch.properties.contains(.read),
+          canWriteWithResponse: ch.properties.contains(.write),
+          canWriteWithoutResponse: ch.properties.contains(.writeWithoutResponse),
+          canNotify: ch.properties.contains(.notify),
+          canIndicate: ch.properties.contains(.indicate),
+          descriptors: descriptors
+        )
+      }
+      return ServiceMessage(handle: svcHandle, uuid: fullUuid(service.uuid),
+                            characteristics: characteristics)
+    }
+  }
+
+  // MARK: - タイムアウト / 後始末
+
+  private func failPendingOperations(deviceId: String, error: Error) {
+    discoverCompletions.removeValue(forKey: deviceId)?(.failure(error))
+    pendingDiscovery.removeValue(forKey: deviceId)
+    for key in Array(readCompletions.keys) where key.hasPrefix("\(deviceId)|") {
+      readCompletions.removeValue(forKey: key)?(.failure(error))
+    }
+    for key in Array(writeCompletions.keys) where key.hasPrefix("\(deviceId)|") {
+      writeCompletions.removeValue(forKey: key)?(.failure(error))
+    }
+    for key in Array(notifyCompletions.keys) where key.hasPrefix("\(deviceId)|") {
+      notifyCompletions.removeValue(forKey: key)?(.failure(error))
+    }
+    for key in Array(descriptorReadCompletions.keys) where key.hasPrefix("\(deviceId)|") {
+      descriptorReadCompletions.removeValue(forKey: key)?(.failure(error))
+    }
+    for key in Array(descriptorWriteCompletions.keys) where key.hasPrefix("\(deviceId)|") {
+      descriptorWriteCompletions.removeValue(forKey: key)?(.failure(error))
+    }
+    for key in Array(rssiCompletions.keys) where key.hasPrefix("\(deviceId)|") {
+      rssiCompletions.removeValue(forKey: key)?(.failure(error))
+    }
+  }
+
+  /// operation timeout 時は旧接続を破棄し、以後その epoch を継続利用しない（§6）。
+  private func handleOperationTimeout(deviceId: String, epoch: Int64) {
+    activeCallbacks?.onOperationTimeout(deviceId: deviceId, connectionEpoch: epoch) { _ in }
+    failPendingOperations(deviceId: deviceId, error: BleErrorMapping.operationTimeout())
+    opQueue.cancelAll(deviceId: deviceId, epoch: epoch)
+    _ = state.disconnectRequested(deviceId: deviceId, epoch: epoch)
+    if let peripheral = peripheralsByDeviceId[deviceId] {
+      central?.cancelPeripheralConnection(peripheral)
+    }
+    handleRegistry.clear(deviceId: deviceId)
+    emitConnectionState(
+      deviceId: deviceId, epoch: epoch,
+      state: .disconnected, reason: .operationTimeout
     )
   }
 
