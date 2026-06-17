@@ -11,6 +11,10 @@ public class DeepskyBluetoothIosPlugin: NSObject, FlutterPlugin {
     super.init()
   }
 
+  deinit {
+    owner.unregisterSink(engineToken: engineToken)
+  }
+
   public static func register(with registrar: FlutterPluginRegistrar) {
     let channel = FlutterMethodChannel(name: "deepsky_bluetooth_ios", binaryMessenger: registrar.messenger())
     let instance = DeepskyBluetoothIosPlugin()

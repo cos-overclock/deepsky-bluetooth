@@ -207,11 +207,11 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
 
   func dispose() {
     stopScan()
-    peripheralsByDeviceId.forEach { deviceId, peripheral in
-      if let epoch = state.currentEpoch(deviceId: deviceId) {
-        _ = state.disconnectRequested(deviceId: deviceId, epoch: epoch)
+    peripheralsByDeviceId.forEach { entry in
+      if let epoch = state.currentEpoch(deviceId: entry.key) {
+        _ = state.disconnectRequested(deviceId: entry.key, epoch: epoch)
       }
-      central?.cancelPeripheralConnection(peripheral)
+      central?.cancelPeripheralConnection(entry.value)
     }
     peripheralsByDeviceId.removeAll()
     callbacksByEngine.removeAll()

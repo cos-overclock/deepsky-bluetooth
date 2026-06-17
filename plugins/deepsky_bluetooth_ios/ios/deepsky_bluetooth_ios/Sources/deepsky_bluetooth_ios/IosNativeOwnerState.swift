@@ -35,8 +35,8 @@ final class IosNativeOwnerState {
     lock.lock()
     defer { lock.unlock() }
 
-    return states.compactMap { deviceId, state in
-      state == .pending ? deviceId : nil
+    return states.compactMap { entry in
+      entry.value == .pending ? entry.key : nil
     }
   }
 
@@ -44,11 +44,11 @@ final class IosNativeOwnerState {
     lock.lock()
     defer { lock.unlock() }
 
-    return activeEpochs.compactMap { deviceId, epoch in
-      guard let state = states[deviceId], state != .disconnected else {
+    return activeEpochs.compactMap { entry in
+      guard let state = states[entry.key], state != .disconnected else {
         return nil
       }
-      return IosConnectionSnapshot(deviceId: deviceId, epoch: epoch, state: state)
+      return IosConnectionSnapshot(deviceId: entry.key, epoch: entry.value, state: state)
     }
   }
 
