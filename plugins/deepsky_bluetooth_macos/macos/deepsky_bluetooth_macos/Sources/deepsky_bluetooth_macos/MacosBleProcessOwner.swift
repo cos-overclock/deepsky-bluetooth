@@ -170,6 +170,12 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripher
       completion(.failure(BleErrorMapping.notConnected()))
       return
     }
+    // discoverCompletions は deviceId 一意。epoch bump で別 epoch の探索が走っても
+    // 進行中の completion を上書きしないよう、device 単位で in-progress を弾く。
+    guard discoverCompletions[deviceId] == nil else {
+      completion(.failure(BleErrorMapping.failed("Service discovery already in progress")))
+      return
+    }
     let key = discoveryKey(deviceId, connectionEpoch)
     guard !opQueue.contains(key: key) else {
       completion(.failure(BleErrorMapping.failed("Service discovery already in progress")))
@@ -816,6 +822,12 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripher
 
   /// operation timeout 時は旧接続を破棄し、以後その epoch を継続利用しない（§6）。
   private func handleOperationTimeout(deviceId: String, epoch: Int64) {
+    // timeout した operation が旧 epoch（既に新しい接続実体へ更新済み）の場合、
+    // 現行接続を巻き込んで破棄しない。古い queue scope だけ片付けて終わる。
+    guard state.isCurrent(deviceId: deviceId, epoch: epoch) else {
+      opQueue.cancelAll(deviceId: deviceId, epoch: epoch)
+      return
+    }
     activeCallbacks?.onOperationTimeout(deviceId: deviceId, connectionEpoch: epoch) { _ in }
     failPendingOperations(deviceId: deviceId, error: BleErrorMapping.operationTimeout())
     opQueue.cancelAll(deviceId: deviceId, epoch: epoch)
