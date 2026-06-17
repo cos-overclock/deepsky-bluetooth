@@ -183,12 +183,14 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
       return
     }
     let key = discoveryKey(deviceId, connectionEpoch)
-    guard enqueueOperation("discovery", key: key, deviceId: deviceId, epoch: connectionEpoch) else {
+    guard enqueueOperation(
+      "discovery", key: key, deviceId: deviceId, epoch: connectionEpoch,
+      start: { peripheral.discoverServices(nil) }
+    ) else {
       completion(.failure(BleErrorMapping.failed("Service discovery already in progress")))
       return
     }
     discoverCompletions[deviceId] = completion
-    peripheral.discoverServices(nil)
   }
 
   func readCharacteristic(
@@ -212,12 +214,14 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
         break
       }
       let key = charKey(target)
-      guard enqueueOperation("read", key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
+      guard enqueueOperation(
+        "read", key: key, deviceId: target.deviceId, epoch: target.connectionEpoch,
+        start: { peripheral.readValue(for: ch) }
+      ) else {
         completion(.failure(BleErrorMapping.failed("A read for this characteristic is already in flight")))
         return
       }
       readCompletions[key] = completion
-      peripheral.readValue(for: ch)
     }
   }
 
@@ -244,15 +248,34 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
         completion(.failure(BleErrorMapping.bufferFull()))
       case .proceedWithResponse:
         let key = charKey(target)
-        guard enqueueOperation("write", key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
+        guard enqueueOperation(
+          "write", key: key, deviceId: target.deviceId, epoch: target.connectionEpoch,
+          start: { peripheral.writeValue(value.data, for: ch, type: .withResponse) }
+        ) else {
           completion(.failure(BleErrorMapping.failed("A write for this characteristic is already in flight")))
           return
         }
         writeCompletions[key] = completion
-        peripheral.writeValue(value.data, for: ch, type: .withResponse)
       case .proceedWithoutResponse:
-        peripheral.writeValue(value.data, for: ch, type: .withoutResponse)
-        completion(.success(()))
+        let key = charKey(target)
+        guard !opQueue.contains(key: key) else {
+          completion(.failure(BleErrorMapping.failed("A write for this characteristic is already in flight")))
+          return
+        }
+        writeCompletions[key] = completion
+        guard enqueueOperation(
+          "writeWithoutResponse", key: key, deviceId: target.deviceId,
+          epoch: target.connectionEpoch,
+          start: { [weak self] in
+            peripheral.writeValue(value.data, for: ch, type: .withoutResponse)
+            _ = self?.opQueue.complete(key: key)
+            self?.writeCompletions.removeValue(forKey: key)?(.success(()))
+          }
+        ) else {
+          writeCompletions.removeValue(forKey: key)
+          completion(.failure(BleErrorMapping.failed("A write for this characteristic is already in flight")))
+          return
+        }
       }
     }
   }
@@ -275,12 +298,14 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
         break
       }
       let key = charKey(target)
-      guard enqueueOperation("notify", key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
+      guard enqueueOperation(
+        "notify", key: key, deviceId: target.deviceId, epoch: target.connectionEpoch,
+        start: { peripheral.setNotifyValue(enabled, for: ch) }
+      ) else {
         completion(.failure(BleErrorMapping.failed("A notify state change for this characteristic is already in flight")))
         return
       }
       notifyCompletions[key] = completion
-      peripheral.setNotifyValue(enabled, for: ch)
     }
   }
 
@@ -293,12 +318,15 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
       completion(.failure(e))
     case .success(let (peripheral, d)):
       let key = descKey(target)
-      guard enqueueOperation("descriptorRead", key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
+      guard enqueueOperation(
+        "descriptorRead", key: key, deviceId: target.deviceId,
+        epoch: target.connectionEpoch,
+        start: { peripheral.readValue(for: d) }
+      ) else {
         completion(.failure(BleErrorMapping.failed("A descriptor read is already in flight")))
         return
       }
       descriptorReadCompletions[key] = completion
-      peripheral.readValue(for: d)
     }
   }
 
@@ -312,12 +340,15 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
       completion(.failure(e))
     case .success(let (peripheral, d)):
       let key = descKey(target)
-      guard enqueueOperation("descriptorWrite", key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
+      guard enqueueOperation(
+        "descriptorWrite", key: key, deviceId: target.deviceId,
+        epoch: target.connectionEpoch,
+        start: { peripheral.writeValue(value.data, for: d) }
+      ) else {
         completion(.failure(BleErrorMapping.failed("A descriptor write is already in flight")))
         return
       }
       descriptorWriteCompletions[key] = completion
-      peripheral.writeValue(value.data, for: d)
     }
   }
 
@@ -349,12 +380,14 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
       return
     }
     let key = rssiKey(deviceId, connectionEpoch)
-    guard enqueueOperation("rssi", key: key, deviceId: deviceId, epoch: connectionEpoch) else {
+    guard enqueueOperation(
+      "rssi", key: key, deviceId: deviceId, epoch: connectionEpoch,
+      start: { peripheral.readRSSI() }
+    ) else {
       completion(.failure(BleErrorMapping.failed("RSSI read already in flight")))
       return
     }
     rssiCompletions[key] = completion
-    peripheral.readRSSI()
   }
 
   func dispose() {
@@ -766,9 +799,16 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
   /// FIFO operation queue への投入を診断付きで行う。enqueue 成功時に os_log へ
   /// "queued" を記録し、GATT queue を Console.app から観測できるようにする。
   private func enqueueOperation(
-    _ kind: String, key: String, deviceId: String, epoch: Int64
+    _ kind: String,
+    key: String,
+    deviceId: String,
+    epoch: Int64,
+    start: @escaping () -> Void
   ) -> Bool {
-    let enqueued = opQueue.enqueue(key: key, deviceId: deviceId, epoch: epoch)
+    let enqueued = opQueue.enqueue(key: key, deviceId: deviceId, epoch: epoch) { [weak self] in
+      self?.diagnostics.operation(kind, deviceId: deviceId, epoch: epoch, phase: "started")
+      start()
+    }
     if enqueued {
       diagnostics.operation(kind, deviceId: deviceId, epoch: epoch, phase: "queued")
     }
