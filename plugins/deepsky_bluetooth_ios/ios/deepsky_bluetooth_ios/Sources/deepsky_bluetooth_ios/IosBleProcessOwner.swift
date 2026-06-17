@@ -167,7 +167,26 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     strictRead: Bool,
     completion: @escaping (Result<FlutterStandardTypedData, Error>) -> Void
   ) {
-    completion(.failure(BleErrorMapping.notSupported("Characteristic read is not implemented in this slice")))
+    switch findCharacteristic(target) {
+    case .failure(let e):
+      completion(.failure(e))
+    case .success(let (peripheral, ch)):
+      guard ch.properties.contains(.read) else {
+        completion(.failure(BleErrorMapping.notSupported("Read not supported")))
+        return
+      }
+      if strictRead, ch.isNotifying {
+        completion(.failure(BleErrorMapping.readAmbiguousWhileNotifying()))
+        return
+      }
+      let key = charKey(target)
+      guard opQueue.enqueue(key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
+        completion(.failure(BleErrorMapping.failed("A read for this characteristic is already in flight")))
+        return
+      }
+      readCompletions[key] = completion
+      peripheral.readValue(for: ch)
+    }
   }
 
   func writeCharacteristic(
@@ -176,7 +195,35 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     withResponse: Bool,
     completion: @escaping (Result<Void, Error>) -> Void
   ) {
-    completion(.failure(BleErrorMapping.notSupported("Characteristic write is not implemented in this slice")))
+    switch findCharacteristic(target) {
+    case .failure(let e):
+      completion(.failure(e))
+    case .success(let (peripheral, ch)):
+      if withResponse {
+        guard ch.properties.contains(.write) else {
+          completion(.failure(BleErrorMapping.notSupported("Write with response not supported")))
+          return
+        }
+        let key = charKey(target)
+        guard opQueue.enqueue(key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
+          completion(.failure(BleErrorMapping.failed("A write for this characteristic is already in flight")))
+          return
+        }
+        writeCompletions[key] = completion
+        peripheral.writeValue(value.data, for: ch, type: .withResponse)
+      } else {
+        guard ch.properties.contains(.writeWithoutResponse) else {
+          completion(.failure(BleErrorMapping.notSupported("Write without response not supported")))
+          return
+        }
+        guard peripheral.canSendWriteWithoutResponse else {
+          completion(.failure(BleErrorMapping.bufferFull()))
+          return
+        }
+        peripheral.writeValue(value.data, for: ch, type: .withoutResponse)
+        completion(.success(()))
+      }
+    }
   }
 
   func setNotify(
@@ -184,14 +231,41 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     type: NotifyTypeMessage,
     completion: @escaping (Result<Void, Error>) -> Void
   ) {
-    completion(.failure(BleErrorMapping.notSupported("Notify is not implemented in this slice")))
+    switch findCharacteristic(target) {
+    case .failure(let e):
+      completion(.failure(e))
+    case .success(let (peripheral, ch)):
+      let enabled = type != .disable
+      guard ch.properties.contains(.notify) || ch.properties.contains(.indicate) else {
+        completion(.failure(BleErrorMapping.notSupported("Notify/Indicate not supported")))
+        return
+      }
+      let key = charKey(target)
+      guard opQueue.enqueue(key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
+        completion(.failure(BleErrorMapping.failed("A notify state change for this characteristic is already in flight")))
+        return
+      }
+      notifyCompletions[key] = completion
+      peripheral.setNotifyValue(enabled, for: ch)
+    }
   }
 
   func readDescriptor(
     target: DescriptorTargetMessage,
     completion: @escaping (Result<FlutterStandardTypedData, Error>) -> Void
   ) {
-    completion(.failure(BleErrorMapping.notSupported("Descriptor read is not implemented in this slice")))
+    switch findDescriptor(target) {
+    case .failure(let e):
+      completion(.failure(e))
+    case .success(let (peripheral, d)):
+      let key = descKey(target)
+      guard opQueue.enqueue(key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
+        completion(.failure(BleErrorMapping.failed("A descriptor read is already in flight")))
+        return
+      }
+      descriptorReadCompletions[key] = completion
+      peripheral.readValue(for: d)
+    }
   }
 
   func writeDescriptor(
@@ -199,7 +273,18 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     value: FlutterStandardTypedData,
     completion: @escaping (Result<Void, Error>) -> Void
   ) {
-    completion(.failure(BleErrorMapping.notSupported("Descriptor write is not implemented in this slice")))
+    switch findDescriptor(target) {
+    case .failure(let e):
+      completion(.failure(e))
+    case .success(let (peripheral, d)):
+      let key = descKey(target)
+      guard opQueue.enqueue(key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
+        completion(.failure(BleErrorMapping.failed("A descriptor write is already in flight")))
+        return
+      }
+      descriptorWriteCompletions[key] = completion
+      peripheral.writeValue(value.data, for: d)
+    }
   }
 
   func getMtu(
@@ -222,7 +307,20 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     connectionEpoch: Int64,
     completion: @escaping (Result<Int64, Error>) -> Void
   ) {
-    completion(.failure(BleErrorMapping.notSupported("RSSI read is not implemented in this slice")))
+    guard state.isCurrent(deviceId: deviceId, epoch: connectionEpoch),
+          let peripheral = peripheralsByDeviceId[deviceId],
+          peripheral.state == .connected
+    else {
+      completion(.failure(BleErrorMapping.notConnected()))
+      return
+    }
+    let key = rssiKey(deviceId, connectionEpoch)
+    guard opQueue.enqueue(key: key, deviceId: deviceId, epoch: connectionEpoch) else {
+      completion(.failure(BleErrorMapping.failed("RSSI read already in flight")))
+      return
+    }
+    rssiCompletions[deviceId] = completion
+    peripheral.readRSSI()
   }
 
   func dispose() {
@@ -406,6 +504,123 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     let services = rebuildHandles(peripheral: peripheral)
     _ = opQueue.complete(key: discoveryKey(deviceId, epoch))
     completion(.success(services))
+  }
+
+  // MARK: - CBPeripheralDelegate (GATT operations)
+
+  func peripheral(
+    _ peripheral: CBPeripheral,
+    didUpdateValueFor characteristic: CBCharacteristic,
+    error: Error?
+  ) {
+    guard let key = charKey(peripheral, characteristic) else { return }
+    let data = characteristic.value ?? Data()
+    if let completion = readCompletions.removeValue(forKey: key) {
+      _ = opQueue.complete(key: key)
+      if let error {
+        completion(.failure(BleErrorMapping.failed(error.localizedDescription)))
+      } else {
+        completion(.success(FlutterStandardTypedData(bytes: data)))
+        // read 応答と notify を区別できないため、notify 有効中なら同値を values にも流す
+        if characteristic.isNotifying {
+          emitCharacteristicValue(peripheral, characteristic, data: data)
+        }
+      }
+      return
+    }
+    // pending read がなければ notify イベント
+    guard error == nil else { return }
+    emitCharacteristicValue(peripheral, characteristic, data: data)
+  }
+
+  func peripheral(
+    _ peripheral: CBPeripheral,
+    didWriteValueFor characteristic: CBCharacteristic,
+    error: Error?
+  ) {
+    guard let key = charKey(peripheral, characteristic),
+          let completion = writeCompletions.removeValue(forKey: key) else { return }
+    _ = opQueue.complete(key: key)
+    if let error {
+      completion(.failure(BleErrorMapping.failed(error.localizedDescription)))
+    } else {
+      completion(.success(()))
+    }
+  }
+
+  func peripheral(
+    _ peripheral: CBPeripheral,
+    didUpdateNotificationStateFor characteristic: CBCharacteristic,
+    error: Error?
+  ) {
+    guard let key = charKey(peripheral, characteristic),
+          let completion = notifyCompletions.removeValue(forKey: key) else { return }
+    _ = opQueue.complete(key: key)
+    if let error {
+      completion(.failure(BleErrorMapping.failed(error.localizedDescription)))
+    } else {
+      completion(.success(()))
+    }
+  }
+
+  func peripheral(
+    _ peripheral: CBPeripheral,
+    didUpdateValueFor descriptor: CBDescriptor,
+    error: Error?
+  ) {
+    guard let key = descKey(peripheral, descriptor),
+          let completion = descriptorReadCompletions.removeValue(forKey: key) else { return }
+    _ = opQueue.complete(key: key)
+    if let error {
+      completion(.failure(BleErrorMapping.failed(error.localizedDescription)))
+    } else {
+      let data = descriptor.value as? Data ?? Data()
+      completion(.success(FlutterStandardTypedData(bytes: data)))
+    }
+  }
+
+  func peripheral(
+    _ peripheral: CBPeripheral,
+    didWriteValueFor descriptor: CBDescriptor,
+    error: Error?
+  ) {
+    guard let key = descKey(peripheral, descriptor),
+          let completion = descriptorWriteCompletions.removeValue(forKey: key) else { return }
+    _ = opQueue.complete(key: key)
+    if let error {
+      completion(.failure(BleErrorMapping.failed(error.localizedDescription)))
+    } else {
+      completion(.success(()))
+    }
+  }
+
+  func peripheral(_ peripheral: CBPeripheral, didReadRSSI RSSI: NSNumber, error: Error?) {
+    let deviceId = peripheral.identifier.uuidString
+    guard let epoch = state.currentEpoch(deviceId: deviceId) else { return }
+    let key = rssiKey(deviceId, epoch)
+    guard let completion = rssiCompletions.removeValue(forKey: deviceId) else { return }
+    _ = opQueue.complete(key: key)
+    if let error {
+      completion(.failure(BleErrorMapping.failed(error.localizedDescription)))
+    } else {
+      completion(.success(RSSI.int64Value))
+    }
+  }
+
+  private func emitCharacteristicValue(
+    _ peripheral: CBPeripheral,
+    _ ch: CBCharacteristic,
+    data: Data
+  ) {
+    let deviceId = peripheral.identifier.uuidString
+    guard let epoch = state.currentEpoch(deviceId: deviceId),
+          let handle = handleRegistry.handle(for: ch) else { return }
+    activeCallbacks?.onCharacteristicValue(
+      deviceId: deviceId,
+      connectionEpoch: epoch,
+      characteristicHandle: handle,
+      value: FlutterStandardTypedData(bytes: data)
+    ) { _ in }
   }
 
   // MARK: - GATT ヘルパー
