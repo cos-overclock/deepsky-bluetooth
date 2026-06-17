@@ -11,7 +11,10 @@ import android.content.Context
  * background callback handle の永続化と `COMPANION_DEVICE` strategy の受理は #28 で扱う
  * (handle は [HeadlessEngineLauncher] が保存し、process 死後の headless 復活に使う)。
  */
-class BleCentralManager(private val context: Context) : BleHostApi {
+class BleCentralManager(
+    private val context: Context,
+    private val engineToken: String,
+) : BleHostApi {
 
     override fun initialize(request: InitializeRequestMessage): String {
         return observe("initialize", mapOf("isBackground" to request.isBackground)) {
@@ -43,13 +46,13 @@ class BleCentralManager(private val context: Context) : BleHostApi {
                     )
                 }
             }
-            "engine-${System.identityHashCode(this)}"
+            engineToken
         }
     }
 
     override fun notifyDartReady(engineToken: String) {
         observe("notifyDartReady", mapOf("engineToken" to engineToken)) {
-            // state snapshot handover は #29。現状は現在の adapter 状態だけ通知する。
+            BleProcessOwner.notifyDartReady(engineToken)
             BleProcessOwner.emitCurrentAdapterState()
         }
     }
@@ -59,7 +62,8 @@ class BleCentralManager(private val context: Context) : BleHostApi {
             "ackStateResync",
             mapOf("engineToken" to engineToken, "snapshotId" to snapshotId),
         ) {
-            // sink handover protocol は #29 で実装する。
+            val retiredToken = BleProcessOwner.ackStateResync(engineToken, snapshotId)
+            if (retiredToken != null) HeadlessEngineLauncher.onUiHandoverAcknowledged()
         }
     }
 

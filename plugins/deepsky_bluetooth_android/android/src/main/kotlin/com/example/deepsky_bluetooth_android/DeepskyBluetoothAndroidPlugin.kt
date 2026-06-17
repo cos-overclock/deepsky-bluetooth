@@ -23,6 +23,7 @@ class DeepskyBluetoothAndroidPlugin :
 
     private var callbacks: BleCallbacksApi? = null
     private var activityBinding: ActivityPluginBinding? = null
+    private val engineToken = "engine-${System.identityHashCode(this)}"
 
     // Whether this engine's plugin instance ever attached to an Activity. A headless relaunch
     // engine never does, so this distinguishes UI vs headless engines on detach (#28).
@@ -34,9 +35,12 @@ class DeepskyBluetoothAndroidPlugin :
             appContext = binding.applicationContext
             BleProcessOwner.attach(binding.applicationContext)
             val cb = BleCallbacksApi(binding.binaryMessenger)
-            BleProcessOwner.registerSink(cb)
+            BleProcessOwner.registerSink(engineToken, cb)
             callbacks = cb
-            BleHostApi.setUp(binding.binaryMessenger, BleCentralManager(binding.applicationContext))
+            BleHostApi.setUp(
+                binding.binaryMessenger,
+                BleCentralManager(binding.applicationContext, engineToken),
+            )
         }
     }
 
@@ -44,7 +48,7 @@ class DeepskyBluetoothAndroidPlugin :
         BleNativeObservers.observeMethod("plugin.detach") {
             BleHostApi.setUp(binding.binaryMessenger, null)
             // engine 固有 sink だけを解除。接続・scan・epoch は owner が保持し続ける(close しない)。
-            callbacks?.let { BleProcessOwner.unregisterSink(it) }
+            callbacks?.let { BleProcessOwner.unregisterSink(engineToken, it) }
             callbacks = null
             // Report the detach so the launcher can relaunch a headless engine when a UI engine is
             // lost while the Foreground Service runs (#28). A headless engine never attached to an

@@ -23,6 +23,8 @@ import com.example.deepsky_bluetooth_android.core.EpochRegistry
 import com.example.deepsky_bluetooth_android.core.PendingPresenceBuffer
 import com.example.deepsky_bluetooth_android.core.ReconnectDriver
 import com.example.deepsky_bluetooth_android.core.ReconnectDriverSelector
+import com.example.deepsky_bluetooth_android.core.HandoverEvent
+import com.example.deepsky_bluetooth_android.core.SinkHandoverCoordinator
 
 /**
  * プロセスグローバルな BLE owner singleton。
@@ -46,8 +48,8 @@ object BleProcessOwner {
 
     private var appContext: Context? = null
 
-    @Volatile
-    private var sink: BleCallbacksApi? = null
+    private val handover = SinkHandoverCoordinator()
+    private val sinks = mutableMapOf<String, BleCallbacksApi>()
     private var scanCallback: ScanCallback? = null
     private var adapterReceiverRegistered = false
 
@@ -79,12 +81,11 @@ object BleProcessOwner {
         if (appContext == null) appContext = context.applicationContext
     }
 
-    /** engine attach 時の sink 登録。active sink は常に1つとする(Review guide §12)。 */
+    /** engine attach 時の sink 登録。ack までは candidate として保持する(Review guide §12)。 */
     @Synchronized
-    fun registerSink(callbacks: BleCallbacksApi) {
-        sink = callbacks
-        // engine 不在中に蓄えた presence event を新 sink へ flush する(Review guide §12)。
-        pendingPresence.drain().forEach { emitPresence(callbacks, it) }
+    fun registerSink(engineToken: String, callbacks: BleCallbacksApi) {
+        sinks[engineToken] = callbacks
+        handover.attachCandidate(engineToken)
     }
 
     /**
@@ -92,15 +93,47 @@ object BleProcessOwner {
      * 場合だけ sink を外す。
      */
     @Synchronized
-    fun unregisterSink(callbacks: BleCallbacksApi) {
-        if (sink === callbacks) sink = null
+    fun unregisterSink(engineToken: String, callbacks: BleCallbacksApi) {
+        if (sinks[engineToken] === callbacks) sinks.remove(engineToken)
+        handover.detach(engineToken)
+    }
+
+    /** notifyDartReady 時に candidate sink へ state snapshot を送る。 */
+    fun notifyDartReady(engineToken: String) {
+        val delivery = synchronized(this) {
+            val snapshot = handover.onDartReady(engineToken) ?: return
+            val candidate = sinks[engineToken] ?: return
+            candidate to snapshot
+        }
+        BleNativeObservers.emitCallback(
+            "onStateResync",
+            mapOf("snapshotId" to delivery.second.snapshotId),
+        )
+        delivery.first.onStateResync(delivery.second) {}
+    }
+
+    /** snapshot ack 後に candidate を active 化し、buffer を順序通り flush する。 */
+    fun ackStateResync(engineToken: String, snapshotId: String): String? {
+        val delivery = synchronized(this) {
+            val ack = handover.ackStateResync(engineToken, snapshotId)
+            ack.retiredToken?.let { sinks.remove(it) }
+            val active = handover.activeToken?.let { sinks[it] }
+            Triple(active, ack, pendingPresence.drain())
+        }
+        val active = delivery.first ?: return delivery.second.retiredToken
+        delivery.third.forEach { emitPresence(active, it) }
+        delivery.second.followUpSnapshot?.let {
+            BleNativeObservers.emitCallback("onStateResync", mapOf("snapshotId" to it.snapshotId))
+            active.onStateResync(it) {}
+        }
+        delivery.second.bufferedEvents.forEach { deliverEvent(active, it) }
+        return delivery.second.retiredToken
     }
 
     /** notifyDartReady 時などに現在の adapter 状態を sink へ通知する。 */
     fun emitCurrentAdapterState() {
         val state = currentAdapterState()
-        BleNativeObservers.emitCallback("onAdapterStateChanged", mapOf("state" to state))
-        sink?.onAdapterStateChanged(state) {}
+        deliverOrBuffer(HandoverEvent.AdapterStateChanged(state))
     }
 
     // --- foreground service ---------------------------------------------
@@ -153,7 +186,10 @@ object BleProcessOwner {
     fun reconnectDriver(deviceId: String): ReconnectDriver {
         val id = DeviceAddressNormalizer.normalize(deviceId) ?: deviceId
         val enabled = synchronized(presenceEnabledDevices) { presenceEnabledDevices.contains(id) }
-        return ReconnectDriverSelector.select(presenceEnabled = enabled, hasUiEngine = sink != null)
+        val hasEngine = synchronized(this) {
+            handover.activeToken != null || handover.candidateToken != null
+        }
+        return ReconnectDriverSelector.select(presenceEnabled = enabled, hasUiEngine = hasEngine)
     }
 
     // --- CompanionDeviceService presence callback の受け口(#27) ---------
@@ -202,15 +238,22 @@ object BleProcessOwner {
      * する。さもないと sink==null を観測した直後に registerSink が drain を終え、その後 record した event
      * が次の registerSink まで滞留する race が起きる。
      */
-    @Synchronized
     private fun deliverPresence(event: CompanionPresenceEvent?) {
         if (event == null) return
-        val s = sink
-        if (s != null) {
-            emitPresence(s, event)
-        } else {
-            pendingPresence.record(event)
+        val delivery = synchronized(this) {
+            if (handover.activeToken == null && handover.candidateToken == null) {
+                pendingPresence.record(event)
+                return
+            }
+            val handoverEvent = if (event.appeared) {
+                HandoverEvent.DeviceAppeared(event.deviceId)
+            } else {
+                HandoverEvent.DeviceDisappeared(event.deviceId)
+            }
+            val decision = handover.recordEvent(handoverEvent)
+            if (decision.deliverImmediately) activeSinkLocked() to handoverEvent else null
         }
+        delivery?.let { deliverEvent(it.first ?: return, it.second) }
     }
 
     private fun emitPresence(s: BleCallbacksApi, event: CompanionPresenceEvent) {
@@ -220,6 +263,80 @@ object BleProcessOwner {
         } else {
             BleNativeObservers.emitCallback("onDeviceDisappeared", mapOf("deviceId" to event.deviceId))
             s.onDeviceDisappeared(event.deviceId) {}
+        }
+    }
+
+    private fun deliverOrBuffer(event: HandoverEvent) {
+        val target = synchronized(this) {
+            val decision = handover.recordEvent(event)
+            if (decision.deliverImmediately) activeSinkLocked() else null
+        }
+        target?.let { deliverEvent(it, event) }
+    }
+
+    private fun activeSinkLocked(): BleCallbacksApi? =
+        handover.activeToken?.let { sinks[it] }
+
+    private fun deliverEvent(s: BleCallbacksApi, event: HandoverEvent) {
+        when (event) {
+            is HandoverEvent.ScanResult -> {
+                BleNativeObservers.emitCallback(
+                    "onScanResult",
+                    mapOf("deviceId" to event.result.deviceId),
+                )
+                s.onScanResult(event.result) {}
+            }
+            is HandoverEvent.ScanFailed -> {
+                BleNativeObservers.emitCallback("onScanFailed", mapOf("code" to event.code))
+                s.onScanFailed(event.code, event.message) {}
+            }
+            is HandoverEvent.AdapterStateChanged -> {
+                BleNativeObservers.emitCallback(
+                    "onAdapterStateChanged",
+                    mapOf("state" to event.state),
+                )
+                s.onAdapterStateChanged(event.state) {}
+            }
+            is HandoverEvent.CharacteristicValue -> {
+                BleNativeObservers.emitCallback(
+                    "onCharacteristicValue",
+                    mapOf(
+                        "deviceId" to event.deviceId,
+                        "connectionEpoch" to event.connectionEpoch,
+                        "characteristicHandle" to event.characteristicHandle,
+                    ),
+                )
+                s.onCharacteristicValue(
+                    event.deviceId,
+                    event.connectionEpoch,
+                    event.characteristicHandle,
+                    event.value,
+                ) {}
+            }
+            is HandoverEvent.OperationTimeout -> {
+                BleNativeObservers.emitCallback(
+                    "onOperationTimeout",
+                    mapOf(
+                        "deviceId" to event.deviceId,
+                        "connectionEpoch" to event.connectionEpoch,
+                    ),
+                )
+                s.onOperationTimeout(event.deviceId, event.connectionEpoch) {}
+            }
+            is HandoverEvent.DeviceAppeared -> {
+                BleNativeObservers.emitCallback(
+                    "onDeviceAppeared",
+                    mapOf("deviceId" to event.deviceId),
+                )
+                s.onDeviceAppeared(event.deviceId) {}
+            }
+            is HandoverEvent.DeviceDisappeared -> {
+                BleNativeObservers.emitCallback(
+                    "onDeviceDisappeared",
+                    mapOf("deviceId" to event.deviceId),
+                )
+                s.onDeviceDisappeared(event.deviceId) {}
+            }
         }
     }
 
@@ -259,11 +376,7 @@ object BleProcessOwner {
 
         val cb = object : ScanCallback() {
             override fun onScanResult(callbackType: Int, result: ScanResult) {
-                BleNativeObservers.emitCallback(
-                    "onScanResult",
-                    mapOf("deviceId" to result.device.address, "callbackType" to callbackType),
-                )
-                sink?.onScanResult(result.toMessage()) {}
+                deliverOrBuffer(HandoverEvent.ScanResult(result.toMessage()))
             }
 
             // reportDelayMillis > 0 の場合はバッチで届く。
@@ -273,9 +386,12 @@ object BleProcessOwner {
 
             override fun onScanFailed(errorCode: Int) {
                 scanCallback = null
-                BleNativeObservers.emitCallback("onScanFailed", mapOf("errorCode" to errorCode))
-                sink?.onScanFailed(
-                    BleErrorCode.FAILED, "Scan failed (errorCode=$errorCode)") {}
+                deliverOrBuffer(
+                    HandoverEvent.ScanFailed(
+                        BleErrorCode.FAILED,
+                        "Scan failed (errorCode=$errorCode)",
+                    ),
+                )
             }
         }
         a.bluetoothLeScanner.startScan(filter.toScanFilters(), settings.toScanSettings(), cb)
@@ -363,7 +479,12 @@ object BleProcessOwner {
             callback(Result.failure(BleErrorMapping.notConnected()))
             return
         }
-        c.discoverServices(callback)
+        c.discoverServices { result ->
+            result.getOrNull()?.let { services ->
+                handover.recordServices(deviceId, connectionEpoch, services)
+            }
+            callback(result)
+        }
     }
 
     // --- GATT operations -------------------------------------------------
@@ -399,7 +520,17 @@ object BleProcessOwner {
         val c = connectionFor(target.deviceId, target.connectionEpoch) {
             callback(Result.failure(BleErrorMapping.notConnected()))
         } ?: return
-        c.setNotify(target.characteristicHandle, type, callback)
+        c.setNotify(target.characteristicHandle, type) { result ->
+            if (result.isSuccess) {
+                handover.recordNotifyState(
+                    deviceId = target.deviceId,
+                    connectionEpoch = target.connectionEpoch,
+                    characteristicHandle = target.characteristicHandle,
+                    enabled = type != NotifyTypeMessage.DISABLE,
+                )
+            }
+            callback(result)
+        }
     }
 
     fun readDescriptor(
@@ -469,16 +600,22 @@ object BleProcessOwner {
         reason: DisconnectReasonMessage?,
     ) {
         if (!epochs.isCurrent(deviceId, epoch)) return
-        BleNativeObservers.emitCallback(
-            "onConnectionStateChanged",
-            mapOf(
-                "deviceId" to deviceId,
-                "connectionEpoch" to epoch,
-                "state" to state,
-                "reason" to reason,
-            ),
-        )
-        sink?.onConnectionStateChanged(deviceId, epoch, state, reason) {}
+        val target = synchronized(this) {
+            val decision = handover.recordConnectionState(deviceId, epoch, state, reason)
+            if (decision.deliverImmediately) activeSinkLocked() else null
+        }
+        target?.let {
+            BleNativeObservers.emitCallback(
+                "onConnectionStateChanged",
+                mapOf(
+                    "deviceId" to deviceId,
+                    "connectionEpoch" to epoch,
+                    "state" to state,
+                    "reason" to reason,
+                ),
+            )
+            it.onConnectionStateChanged(deviceId, epoch, state, reason) {}
+        }
     }
 
     /**
@@ -492,25 +629,15 @@ object BleProcessOwner {
         value: ByteArray,
     ) {
         if (!epochs.isCurrent(deviceId, epoch)) return
-        BleNativeObservers.emitCallback(
-            "onCharacteristicValue",
-            mapOf(
-                "deviceId" to deviceId,
-                "connectionEpoch" to epoch,
-                "characteristicHandle" to characteristicHandle,
-            ),
+        deliverOrBuffer(
+            HandoverEvent.CharacteristicValue(deviceId, epoch, characteristicHandle, value),
         )
-        sink?.onCharacteristicValue(deviceId, epoch, characteristicHandle, value) {}
     }
 
     /** 操作 timeout を epoch guard 越しに通知する。退役前に呼ぶこと(Review guide §10)。 */
     internal fun onOperationTimeout(deviceId: String, epoch: Long) {
         if (!epochs.isCurrent(deviceId, epoch)) return
-        BleNativeObservers.emitCallback(
-            "onOperationTimeout",
-            mapOf("deviceId" to deviceId, "connectionEpoch" to epoch),
-        )
-        sink?.onOperationTimeout(deviceId, epoch) {}
+        deliverOrBuffer(HandoverEvent.OperationTimeout(deviceId, epoch))
     }
 
     /** 接続実体が閉じたときに呼ぶ。現在 epoch なら退役させ map から外す。 */
@@ -542,7 +669,8 @@ object BleProcessOwner {
             }
             adapterReceiverRegistered = false
         }
-        sink = null
+        sinks.clear()
+        handover.reset()
         activity = null
         companion = null
         // presence の保留 event と有効集合も明示破棄で手放す(dispose 後に古い presence が残らない)。
@@ -568,18 +696,10 @@ object BleProcessOwner {
             if (intent.action != BluetoothAdapter.ACTION_STATE_CHANGED) return
             when (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)) {
                 BluetoothAdapter.STATE_ON -> {
-                    BleNativeObservers.emitCallback(
-                        "onAdapterStateChanged",
-                        mapOf("state" to AdapterStateMessage.POWERED_ON),
-                    )
-                    sink?.onAdapterStateChanged(AdapterStateMessage.POWERED_ON) {}
+                    deliverOrBuffer(HandoverEvent.AdapterStateChanged(AdapterStateMessage.POWERED_ON))
                 }
                 BluetoothAdapter.STATE_OFF -> {
-                    BleNativeObservers.emitCallback(
-                        "onAdapterStateChanged",
-                        mapOf("state" to AdapterStateMessage.POWERED_OFF),
-                    )
-                    sink?.onAdapterStateChanged(AdapterStateMessage.POWERED_OFF) {}
+                    deliverOrBuffer(HandoverEvent.AdapterStateChanged(AdapterStateMessage.POWERED_OFF))
                 }
             }
         }
