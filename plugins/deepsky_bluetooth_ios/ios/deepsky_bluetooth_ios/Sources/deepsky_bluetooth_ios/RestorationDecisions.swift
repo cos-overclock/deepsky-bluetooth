@@ -49,4 +49,3 @@ final class RestorationEventBuffer<Event> {
     return events
   }
 }
-</content>

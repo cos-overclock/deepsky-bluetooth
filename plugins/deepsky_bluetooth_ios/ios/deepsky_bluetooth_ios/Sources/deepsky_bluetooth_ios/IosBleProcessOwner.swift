@@ -16,6 +16,7 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
   private var restoredDeviceIds: [String] = []
   private var restoredServices: [String: [ServiceMessage]] = [:]
   private var restoredNotifyHandles: [String: [Int64]] = [:]
+  private var pendingResyncSnapshotId: String?
   private let restorationBuffer = RestorationEventBuffer<RestorationDeferredEvent>()
   private let handleRegistry = HandleRegistry()
   private var opQueue: GattOperationQueue!
@@ -69,6 +70,13 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     if callbacksByEngine[engineToken] != nil {
       activeEngineToken = engineToken
     }
+    // 最新 resync の snapshotId と一致する ack だけが復元 flush を行う。
+    // engine 再 attach 等で複数 resync が出た場合、古い/順序前後した ack で
+    // 復元 event を早期 flush しない（Android の gating と同じ）。
+    guard let pending = pendingResyncSnapshotId, pending == snapshotId else {
+      return
+    }
+    pendingResyncSnapshotId = nil
     // §13: snapshot ready / ack 後に restoredConnections を通知し、
     // 続けて復元中に保持した delegate event を到着順で flush する。
     if !restoredDeviceIds.isEmpty {
@@ -363,6 +371,7 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     restoredDeviceIds.removeAll()
     restoredServices.removeAll()
     restoredNotifyHandles.removeAll()
+    pendingResyncSnapshotId = nil
     _ = restorationBuffer.flush()
   }
 
@@ -986,8 +995,11 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
         restored: restoredDeviceIds.contains(snapshot.deviceId)
       )
     }
+    // ackStateResync で検証できるよう、発行した snapshotId を保持する。
+    let snapshotId = UUID().uuidString
+    pendingResyncSnapshotId = snapshotId
     let snapshot = StateResyncMessage(
-      snapshotId: UUID().uuidString,
+      snapshotId: snapshotId,
       devices: devices
     )
     activeCallbacks?.onStateResync(snapshot: snapshot) { _ in }

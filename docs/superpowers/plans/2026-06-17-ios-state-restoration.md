@@ -71,5 +71,3 @@
 - Restored peripherals with no restored `services` send `services: nil` (Dart re-discovers per §13); their `activeNotifyHandles` is `[]`.
 - `onRestoredConnections` moves from `notifyDartReady` to `ackStateResync` to honor §13 "ready/ack 後に restoredConnections を通知する".
 - No new error strings; no Pigeon schema change.
-</content>
-</invoke>

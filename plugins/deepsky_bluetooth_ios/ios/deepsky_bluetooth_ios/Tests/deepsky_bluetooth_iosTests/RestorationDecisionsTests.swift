@@ -161,4 +161,3 @@ final class RestorationDecisionsTests: XCTestCase {
     XCTAssertTrue(snapshot.restored)
   }
 }
-</content>
