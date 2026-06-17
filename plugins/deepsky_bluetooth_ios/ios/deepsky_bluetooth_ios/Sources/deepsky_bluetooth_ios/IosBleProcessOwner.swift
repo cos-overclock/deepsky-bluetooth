@@ -173,13 +173,16 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     case .failure(let e):
       completion(.failure(e))
     case .success(let (peripheral, ch)):
-      guard ch.properties.contains(.read) else {
+      switch GattOperationDecisions.readDecision(
+        strictRead: strictRead, capability: capability(of: ch)) {
+      case .notSupported:
         completion(.failure(BleErrorMapping.notSupported("Read not supported")))
         return
-      }
-      if strictRead, ch.isNotifying {
+      case .ambiguousWhileNotifying:
         completion(.failure(BleErrorMapping.readAmbiguousWhileNotifying()))
         return
+      case .proceed:
+        break
       }
       let key = charKey(target)
       guard opQueue.enqueue(key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
@@ -201,11 +204,18 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     case .failure(let e):
       completion(.failure(e))
     case .success(let (peripheral, ch)):
-      if withResponse {
-        guard ch.properties.contains(.write) else {
-          completion(.failure(BleErrorMapping.notSupported("Write with response not supported")))
-          return
-        }
+      switch GattOperationDecisions.writeDecision(
+        withResponse: withResponse,
+        capability: capability(of: ch),
+        canSendWithoutResponse: peripheral.canSendWriteWithoutResponse) {
+      case .notSupported:
+        let message = withResponse
+          ? "Write with response not supported"
+          : "Write without response not supported"
+        completion(.failure(BleErrorMapping.notSupported(message)))
+      case .bufferFull:
+        completion(.failure(BleErrorMapping.bufferFull()))
+      case .proceedWithResponse:
         let key = charKey(target)
         guard opQueue.enqueue(key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
           completion(.failure(BleErrorMapping.failed("A write for this characteristic is already in flight")))
@@ -213,15 +223,7 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
         }
         writeCompletions[key] = completion
         peripheral.writeValue(value.data, for: ch, type: .withResponse)
-      } else {
-        guard ch.properties.contains(.writeWithoutResponse) else {
-          completion(.failure(BleErrorMapping.notSupported("Write without response not supported")))
-          return
-        }
-        guard peripheral.canSendWriteWithoutResponse else {
-          completion(.failure(BleErrorMapping.bufferFull()))
-          return
-        }
+      case .proceedWithoutResponse:
         peripheral.writeValue(value.data, for: ch, type: .withoutResponse)
         completion(.success(()))
       }
@@ -238,9 +240,12 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
       completion(.failure(e))
     case .success(let (peripheral, ch)):
       let enabled = type != .disable
-      guard ch.properties.contains(.notify) || ch.properties.contains(.indicate) else {
+      switch GattOperationDecisions.notifyDecision(capability: capability(of: ch)) {
+      case .notSupported:
         completion(.failure(BleErrorMapping.notSupported("Notify/Indicate not supported")))
         return
+      case .proceed:
+        break
       }
       let key = charKey(target)
       guard opQueue.enqueue(key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
@@ -543,22 +548,23 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
   ) {
     guard let key = charKey(peripheral, characteristic) else { return }
     let data = characteristic.value ?? Data()
-    if let completion = readCompletions.removeValue(forKey: key) {
+    let hasPendingRead = readCompletions[key] != nil
+    switch GattOperationDecisions.readCallbackRouting(
+      hasPendingRead: hasPendingRead, hasError: error != nil) {
+    case .completeReadSuccessThenEmit:
       _ = opQueue.complete(key: key)
-      if let error {
-        completion(.failure(BleErrorMapping.failed(error.localizedDescription)))
-      } else {
-        completion(.success(FlutterStandardTypedData(bytes: data)))
-        // read 応答と notify を区別できないため、notify 有効中なら同値を values にも流す
-        if characteristic.isNotifying {
-          emitCharacteristicValue(peripheral, characteristic, data: data)
-        }
-      }
-      return
+      readCompletions.removeValue(forKey: key)?(.success(FlutterStandardTypedData(bytes: data)))
+      // Review guide §10: 通常 read は戻り値完了に加えて同じ値を values にも流す。
+      emitCharacteristicValue(peripheral, characteristic, data: data)
+    case .completeReadFailure:
+      _ = opQueue.complete(key: key)
+      readCompletions.removeValue(forKey: key)?(
+        .failure(BleErrorMapping.failed(error!.localizedDescription)))
+    case .emitNotify:
+      emitCharacteristicValue(peripheral, characteristic, data: data)
+    case .ignore:
+      break
     }
-    // pending read がなければ notify イベント
-    guard error == nil else { return }
-    emitCharacteristicValue(peripheral, characteristic, data: data)
   }
 
   func peripheral(
@@ -699,6 +705,17 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
 
   private func discoveryKey(_ deviceId: String, _ epoch: Int64) -> String {
     "\(deviceId)|\(epoch)|discovery"
+  }
+
+  private func capability(of ch: CBCharacteristic) -> CharacteristicCapability {
+    CharacteristicCapability(
+      canRead: ch.properties.contains(.read),
+      canWriteWithResponse: ch.properties.contains(.write),
+      canWriteWithoutResponse: ch.properties.contains(.writeWithoutResponse),
+      canNotify: ch.properties.contains(.notify),
+      canIndicate: ch.properties.contains(.indicate),
+      isNotifying: ch.isNotifying
+    )
   }
 
   private func findCharacteristic(
