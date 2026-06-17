@@ -25,12 +25,14 @@ final class BleDiagnostics {
   }
 
   func operation(_ kind: String, deviceId: String, epoch: Int64, phase: String) {
-    os_log("op %{public}@ %{public}@ epoch=%{public}d %{public}@",
+    // Int64 は %lld（%d は 32bit でずれる）。
+    os_log("op %{public}@ %{public}@ epoch=%{public}lld %{public}@",
            log: queue, type: .debug, kind, deviceId, epoch, phase)
   }
 
   func handle(deviceId: String, epoch: Int64, handle: Int64, attribute: String) {
-    os_log("handle %{public}@ epoch=%{public}d %{public}@=%{public}d",
+    // Int64 は %lld（%d は 32bit でずれる）。
+    os_log("handle %{public}@ epoch=%{public}lld %{public}@=%{public}lld",
            log: handleLog, type: .debug, deviceId, epoch, attribute, handle)
   }
 

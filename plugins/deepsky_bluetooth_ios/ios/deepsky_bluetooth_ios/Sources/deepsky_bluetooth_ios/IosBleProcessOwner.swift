@@ -183,7 +183,7 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
       return
     }
     let key = discoveryKey(deviceId, connectionEpoch)
-    guard opQueue.enqueue(key: key, deviceId: deviceId, epoch: connectionEpoch) else {
+    guard enqueueOperation("discovery", key: key, deviceId: deviceId, epoch: connectionEpoch) else {
       completion(.failure(BleErrorMapping.failed("Service discovery already in progress")))
       return
     }
@@ -212,7 +212,7 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
         break
       }
       let key = charKey(target)
-      guard opQueue.enqueue(key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
+      guard enqueueOperation("read", key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
         completion(.failure(BleErrorMapping.failed("A read for this characteristic is already in flight")))
         return
       }
@@ -244,7 +244,7 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
         completion(.failure(BleErrorMapping.bufferFull()))
       case .proceedWithResponse:
         let key = charKey(target)
-        guard opQueue.enqueue(key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
+        guard enqueueOperation("write", key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
           completion(.failure(BleErrorMapping.failed("A write for this characteristic is already in flight")))
           return
         }
@@ -275,7 +275,7 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
         break
       }
       let key = charKey(target)
-      guard opQueue.enqueue(key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
+      guard enqueueOperation("notify", key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
         completion(.failure(BleErrorMapping.failed("A notify state change for this characteristic is already in flight")))
         return
       }
@@ -293,7 +293,7 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
       completion(.failure(e))
     case .success(let (peripheral, d)):
       let key = descKey(target)
-      guard opQueue.enqueue(key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
+      guard enqueueOperation("descriptorRead", key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
         completion(.failure(BleErrorMapping.failed("A descriptor read is already in flight")))
         return
       }
@@ -312,7 +312,7 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
       completion(.failure(e))
     case .success(let (peripheral, d)):
       let key = descKey(target)
-      guard opQueue.enqueue(key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
+      guard enqueueOperation("descriptorWrite", key: key, deviceId: target.deviceId, epoch: target.connectionEpoch) else {
         completion(.failure(BleErrorMapping.failed("A descriptor write is already in flight")))
         return
       }
@@ -349,7 +349,7 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
       return
     }
     let key = rssiKey(deviceId, connectionEpoch)
-    guard opQueue.enqueue(key: key, deviceId: deviceId, epoch: connectionEpoch) else {
+    guard enqueueOperation("rssi", key: key, deviceId: deviceId, epoch: connectionEpoch) else {
       completion(.failure(BleErrorMapping.failed("RSSI read already in flight")))
       return
     }
@@ -763,6 +763,18 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     "\(deviceId)|\(epoch)|discovery"
   }
 
+  /// FIFO operation queue への投入を診断付きで行う。enqueue 成功時に os_log へ
+  /// "queued" を記録し、GATT queue を Console.app から観測できるようにする。
+  private func enqueueOperation(
+    _ kind: String, key: String, deviceId: String, epoch: Int64
+  ) -> Bool {
+    let enqueued = opQueue.enqueue(key: key, deviceId: deviceId, epoch: epoch)
+    if enqueued {
+      diagnostics.operation(kind, deviceId: deviceId, epoch: epoch, phase: "queued")
+    }
+    return enqueued
+  }
+
   private func capability(of ch: CBCharacteristic) -> CharacteristicCapability {
     CharacteristicCapability(
       canRead: ch.properties.contains(.read),
@@ -813,12 +825,18 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
   private func rebuildHandles(peripheral: CBPeripheral) -> [ServiceMessage] {
     let deviceId = peripheral.identifier.uuidString
     handleRegistry.clear(deviceId: deviceId)
+    let epoch = state.currentEpoch(deviceId: deviceId) ?? 0
     return (peripheral.services ?? []).map { service in
       let svcHandle = handleRegistry.allocate(service, kind: .service, deviceId: deviceId)
+      diagnostics.handle(deviceId: deviceId, epoch: epoch, handle: svcHandle, attribute: "service")
       let characteristics = (service.characteristics ?? []).map { ch -> CharacteristicMessage in
         let charHandle = handleRegistry.allocate(ch, kind: .characteristic, deviceId: deviceId)
+        diagnostics.handle(deviceId: deviceId, epoch: epoch, handle: charHandle,
+                           attribute: "characteristic")
         let descriptors = (ch.descriptors ?? []).map { d -> DescriptorMessage in
           let descHandle = handleRegistry.allocate(d, kind: .descriptor, deviceId: deviceId)
+          diagnostics.handle(deviceId: deviceId, epoch: epoch, handle: descHandle,
+                             attribute: "descriptor")
           return DescriptorMessage(handle: descHandle, uuid: fullUuid(d.uuid))
         }
         return CharacteristicMessage(
