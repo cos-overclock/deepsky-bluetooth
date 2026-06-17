@@ -559,7 +559,7 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     case .completeReadFailure:
       _ = opQueue.complete(key: key)
       readCompletions.removeValue(forKey: key)?(
-        .failure(BleErrorMapping.failed(error?.localizedDescription ?? "Read failed")))
+        .failure(BleErrorMapping.failed(error!.localizedDescription)))
     case .emitNotify:
       emitCharacteristicValue(peripheral, characteristic, data: data)
     case .ignore:
