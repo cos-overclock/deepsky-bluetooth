@@ -325,11 +325,14 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
 
   func dispose() {
     stopScan()
-    peripheralsByDeviceId.forEach { entry in
-      if let epoch = state.currentEpoch(deviceId: entry.key) {
-        _ = state.disconnectRequested(deviceId: entry.key, epoch: epoch)
+    for (deviceId, peripheral) in peripheralsByDeviceId {
+      if let epoch = state.currentEpoch(deviceId: deviceId) {
+        _ = state.disconnectRequested(deviceId: deviceId, epoch: epoch)
+        opQueue.cancelAll(deviceId: deviceId, epoch: epoch)
       }
-      central?.cancelPeripheralConnection(entry.value)
+      failPendingOperations(deviceId: deviceId)
+      handleRegistry.clear(deviceId: deviceId)
+      central?.cancelPeripheralConnection(peripheral)
     }
     peripheralsByDeviceId.removeAll()
     callbacksByEngine.removeAll()
@@ -730,8 +733,43 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     }
   }
 
+  // MARK: - タイムアウト
+
+  private func failPendingOperations(deviceId: String) {
+    let err = BleErrorMapping.operationTimeout()
+    discoverCompletions.removeValue(forKey: deviceId)?(.failure(err))
+    pendingDiscovery.removeValue(forKey: deviceId)
+    for key in Array(readCompletions.keys) where key.hasPrefix("\(deviceId)|") {
+      readCompletions.removeValue(forKey: key)?(.failure(err))
+    }
+    for key in Array(writeCompletions.keys) where key.hasPrefix("\(deviceId)|") {
+      writeCompletions.removeValue(forKey: key)?(.failure(err))
+    }
+    for key in Array(notifyCompletions.keys) where key.hasPrefix("\(deviceId)|") {
+      notifyCompletions.removeValue(forKey: key)?(.failure(err))
+    }
+    for key in Array(descriptorReadCompletions.keys) where key.hasPrefix("\(deviceId)|") {
+      descriptorReadCompletions.removeValue(forKey: key)?(.failure(err))
+    }
+    for key in Array(descriptorWriteCompletions.keys) where key.hasPrefix("\(deviceId)|") {
+      descriptorWriteCompletions.removeValue(forKey: key)?(.failure(err))
+    }
+    rssiCompletions.removeValue(forKey: deviceId)?(.failure(err))
+  }
+
   private func handleOperationTimeout(deviceId: String, epoch: Int64) {
-    // Placeholder — full implementation in Task 5
+    activeCallbacks?.onOperationTimeout(deviceId: deviceId, connectionEpoch: epoch) { _ in }
+    failPendingOperations(deviceId: deviceId)
+    opQueue.cancelAll(deviceId: deviceId, epoch: epoch)
+    _ = state.disconnectRequested(deviceId: deviceId, epoch: epoch)
+    if let peripheral = peripheralsByDeviceId[deviceId] {
+      central?.cancelPeripheralConnection(peripheral)
+    }
+    handleRegistry.clear(deviceId: deviceId)
+    emitConnectionState(
+      deviceId: deviceId, epoch: epoch,
+      state: .disconnected, reason: .operationTimeout
+    )
   }
 
   private var activeCallbacks: BleCallbacksApi? {
