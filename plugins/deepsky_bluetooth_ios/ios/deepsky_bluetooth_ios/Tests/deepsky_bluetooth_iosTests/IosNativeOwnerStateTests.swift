@@ -142,6 +142,15 @@ final class IosNativeOwnerStateTests: XCTestCase {
     XCTAssertNil(registry.characteristic(handle: h, deviceId: "D"))
   }
 
+  func testClearRemovesServiceHandle() {
+    let registry = HandleRegistry()
+    let obj = NSObject()
+    _ = registry.allocate(obj, kind: .service, deviceId: "device1")
+    XCTAssertNotNil(registry.handle(for: obj))
+    registry.clear(deviceId: "device1")
+    XCTAssertNil(registry.handle(for: obj), "Service forward entry must be removed by clear")
+  }
+
   // MARK: - GattOperationQueue
 
   func testGattOperationQueueFirstEnqueueSucceeds() {

@@ -8,6 +8,7 @@ enum HandleKind {
 
 final class HandleRegistry {
   private var forward: [ObjectIdentifier: Int64] = [:]
+  private var servicesByDeviceId: [String: [Int64: AnyObject]] = [:]
   private var charByHandle: [String: [Int64: AnyObject]] = [:]
   private var descByHandle: [String: [Int64: AnyObject]] = [:]
   private var nextHandle: Int64 = 1
@@ -20,7 +21,8 @@ final class HandleRegistry {
     forward[id] = handle
     switch kind {
     case .service:
-      break
+      if servicesByDeviceId[deviceId] == nil { servicesByDeviceId[deviceId] = [:] }
+      servicesByDeviceId[deviceId]![handle] = object
     case .characteristic:
       if charByHandle[deviceId] == nil { charByHandle[deviceId] = [:] }
       charByHandle[deviceId]![handle] = object
@@ -44,8 +46,10 @@ final class HandleRegistry {
   }
 
   func clear(deviceId: String) {
+    let services = servicesByDeviceId.removeValue(forKey: deviceId) ?? [:]
     let chars = charByHandle.removeValue(forKey: deviceId) ?? [:]
     let descs = descByHandle.removeValue(forKey: deviceId) ?? [:]
+    for obj in services.values { forward.removeValue(forKey: ObjectIdentifier(obj)) }
     for obj in chars.values { forward.removeValue(forKey: ObjectIdentifier(obj)) }
     for obj in descs.values { forward.removeValue(forKey: ObjectIdentifier(obj)) }
   }

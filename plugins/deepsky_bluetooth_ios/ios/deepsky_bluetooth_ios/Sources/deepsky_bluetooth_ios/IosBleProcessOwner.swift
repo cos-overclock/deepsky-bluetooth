@@ -128,6 +128,8 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
       completion(.failure(BleErrorMapping.notConnected()))
       return
     }
+    opQueue.cancelAll(deviceId: deviceId, epoch: connectionEpoch)
+    failPendingOperations(deviceId: deviceId, error: BleErrorMapping.notConnected())
     handleRegistry.clear(deviceId: deviceId)
     if let peripheral = peripheralsByDeviceId.removeValue(forKey: deviceId) {
       central?.cancelPeripheralConnection(peripheral)
@@ -319,7 +321,7 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
       completion(.failure(BleErrorMapping.failed("RSSI read already in flight")))
       return
     }
-    rssiCompletions[deviceId] = completion
+    rssiCompletions[key] = completion
     peripheral.readRSSI()
   }
 
@@ -330,7 +332,7 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
         _ = state.disconnectRequested(deviceId: deviceId, epoch: epoch)
         opQueue.cancelAll(deviceId: deviceId, epoch: epoch)
       }
-      failPendingOperations(deviceId: deviceId)
+      failPendingOperations(deviceId: deviceId, error: BleErrorMapping.notConnected())
       handleRegistry.clear(deviceId: deviceId)
       central?.cancelPeripheralConnection(peripheral)
     }
@@ -442,6 +444,8 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     else {
       return
     }
+    opQueue.cancelAll(deviceId: deviceId, epoch: epoch)
+    failPendingOperations(deviceId: deviceId, error: BleErrorMapping.notConnected())
     handleRegistry.clear(deviceId: deviceId)
     emitConnectionState(
       deviceId: deviceId,
@@ -457,8 +461,9 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     let deviceId = peripheral.identifier.uuidString
     guard discoverCompletions[deviceId] != nil else { return }
     if let error {
-      guard let epoch = state.currentEpoch(deviceId: deviceId) else { return }
-      _ = opQueue.complete(key: discoveryKey(deviceId, epoch))
+      if let epoch = state.currentEpoch(deviceId: deviceId) {
+        _ = opQueue.complete(key: discoveryKey(deviceId, epoch))
+      }
       pendingDiscovery.removeValue(forKey: deviceId)
       discoverCompletions.removeValue(forKey: deviceId)?(
         .failure(BleErrorMapping.failed(error.localizedDescription)))
@@ -466,8 +471,9 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     }
     let services = peripheral.services ?? []
     if services.isEmpty {
-      guard let epoch = state.currentEpoch(deviceId: deviceId) else { return }
-      _ = opQueue.complete(key: discoveryKey(deviceId, epoch))
+      if let epoch = state.currentEpoch(deviceId: deviceId) {
+        _ = opQueue.complete(key: discoveryKey(deviceId, epoch))
+      }
       discoverCompletions.removeValue(forKey: deviceId)?(.success([]))
       return
     }
@@ -482,6 +488,15 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
   ) {
     let deviceId = peripheral.identifier.uuidString
     guard discoverCompletions[deviceId] != nil else { return }
+    if let error {
+      if let epoch = state.currentEpoch(deviceId: deviceId) {
+        _ = opQueue.complete(key: discoveryKey(deviceId, epoch))
+      }
+      pendingDiscovery.removeValue(forKey: deviceId)
+      discoverCompletions.removeValue(forKey: deviceId)?(
+        .failure(BleErrorMapping.failed(error.localizedDescription)))
+      return
+    }
     let chars = service.characteristics ?? []
     pendingDiscovery[deviceId, default: 0] += chars.count - 1
     chars.forEach { peripheral.discoverDescriptors(for: $0) }
@@ -494,6 +509,16 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     error: Error?
   ) {
     let deviceId = peripheral.identifier.uuidString
+    guard discoverCompletions[deviceId] != nil else { return }
+    if let error {
+      if let epoch = state.currentEpoch(deviceId: deviceId) {
+        _ = opQueue.complete(key: discoveryKey(deviceId, epoch))
+      }
+      pendingDiscovery.removeValue(forKey: deviceId)
+      discoverCompletions.removeValue(forKey: deviceId)?(
+        .failure(BleErrorMapping.failed(error.localizedDescription)))
+      return
+    }
     pendingDiscovery[deviceId, default: 0] -= 1
     finishDiscoveryIfDone(peripheral, deviceId: deviceId)
   }
@@ -577,7 +602,14 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     if let error {
       completion(.failure(BleErrorMapping.failed(error.localizedDescription)))
     } else {
-      let data = descriptor.value as? Data ?? Data()
+      let data: Data
+      if let bytes = descriptor.value as? Data {
+        data = bytes
+      } else if let string = descriptor.value as? String {
+        data = Data(string.utf8)
+      } else {
+        data = Data()
+      }
       completion(.success(FlutterStandardTypedData(bytes: data)))
     }
   }
@@ -601,7 +633,7 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     let deviceId = peripheral.identifier.uuidString
     guard let epoch = state.currentEpoch(deviceId: deviceId) else { return }
     let key = rssiKey(deviceId, epoch)
-    guard let completion = rssiCompletions.removeValue(forKey: deviceId) else { return }
+    guard let completion = rssiCompletions.removeValue(forKey: key) else { return }
     _ = opQueue.complete(key: key)
     if let error {
       completion(.failure(BleErrorMapping.failed(error.localizedDescription)))
@@ -735,8 +767,8 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
 
   // MARK: - タイムアウト
 
-  private func failPendingOperations(deviceId: String) {
-    let err = BleErrorMapping.operationTimeout()
+  private func failPendingOperations(deviceId: String, error: Error) {
+    let err = error
     discoverCompletions.removeValue(forKey: deviceId)?(.failure(err))
     pendingDiscovery.removeValue(forKey: deviceId)
     for key in Array(readCompletions.keys) where key.hasPrefix("\(deviceId)|") {
@@ -754,12 +786,14 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     for key in Array(descriptorWriteCompletions.keys) where key.hasPrefix("\(deviceId)|") {
       descriptorWriteCompletions.removeValue(forKey: key)?(.failure(err))
     }
-    rssiCompletions.removeValue(forKey: deviceId)?(.failure(err))
+    for key in Array(rssiCompletions.keys) where key.hasPrefix("\(deviceId)|") {
+      rssiCompletions.removeValue(forKey: key)?(.failure(err))
+    }
   }
 
   private func handleOperationTimeout(deviceId: String, epoch: Int64) {
     activeCallbacks?.onOperationTimeout(deviceId: deviceId, connectionEpoch: epoch) { _ in }
-    failPendingOperations(deviceId: deviceId)
+    failPendingOperations(deviceId: deviceId, error: BleErrorMapping.operationTimeout())
     opQueue.cancelAll(deviceId: deviceId, epoch: epoch)
     _ = state.disconnectRequested(deviceId: deviceId, epoch: epoch)
     if let peripheral = peripheralsByDeviceId[deviceId] {
