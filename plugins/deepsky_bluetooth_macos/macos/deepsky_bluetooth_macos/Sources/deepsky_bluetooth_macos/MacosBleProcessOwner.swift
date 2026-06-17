@@ -9,11 +9,13 @@ import Foundation
 /// read/write/notify/descriptor/RSSI の queue 接続。
 /// Issue #37: read/notify 共通 callback の契約（routing と read→values 配送）・strictRead
 /// 曖昧性・writeWithoutResponse backpressure→bufferFull・background 初期化拒否。
-/// Observer・error mapping・plugin/Pigeon 配線は #38 で追加する。
+/// Issue #38: os_log Observer 診断・CBError/manager state→共通 error/reason mapping・
+/// plugin/Pigeon 配線（MacosBleHostApi）。
 final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
   static let shared = MacosBleProcessOwner()
 
   private let state = MacosNativeOwnerState()
+  private let diagnostics = BleDiagnostics()
   private var central: CBCentralManager?
   private var callbacksByEngine: [String: BleCallbacksApi] = [:]
   private var activeEngineToken: String?
@@ -54,10 +56,12 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripher
   }
 
   func registerSink(engineToken: String, callbacks: BleCallbacksApi) {
+    diagnostics.sinkHandover(engineToken: engineToken, phase: "register")
     callbacksByEngine[engineToken] = callbacks
   }
 
   func unregisterSink(engineToken: String) {
+    diagnostics.sinkHandover(engineToken: engineToken, phase: "unregister")
     callbacksByEngine.removeValue(forKey: engineToken)
     if activeEngineToken == engineToken {
       activeEngineToken = nil
@@ -196,8 +200,8 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripher
       return
     }
     discoverCompletions[deviceId] = completion
-    guard opQueue.enqueue(
-      key: key, deviceId: deviceId, epoch: connectionEpoch,
+    guard enqueueOperation(
+      "discovery", key: key, deviceId: deviceId, epoch: connectionEpoch,
       start: { peripheral.discoverServices(nil) }
     ) else {
       discoverCompletions.removeValue(forKey: deviceId)
@@ -234,8 +238,8 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripher
         return
       }
       readCompletions[key] = completion
-      guard opQueue.enqueue(
-        key: key, deviceId: target.deviceId, epoch: target.connectionEpoch,
+      guard enqueueOperation(
+        "read", key: key, deviceId: target.deviceId, epoch: target.connectionEpoch,
         start: { peripheral.readValue(for: ch) }
       ) else {
         readCompletions.removeValue(forKey: key)
@@ -277,8 +281,8 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripher
           return
         }
         writeCompletions[key] = completion
-        guard opQueue.enqueue(
-          key: key, deviceId: target.deviceId, epoch: target.connectionEpoch,
+        guard enqueueOperation(
+          "write", key: key, deviceId: target.deviceId, epoch: target.connectionEpoch,
           start: { peripheral.writeValue(value.data, for: ch, type: .withResponse) }
         ) else {
           writeCompletions.removeValue(forKey: key)
@@ -292,8 +296,8 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripher
           return
         }
         writeCompletions[key] = completion
-        guard opQueue.enqueue(
-          key: key, deviceId: target.deviceId, epoch: target.connectionEpoch,
+        guard enqueueOperation(
+          "write", key: key, deviceId: target.deviceId, epoch: target.connectionEpoch,
           start: { [weak self] in
             guard let self else { return }
             // enqueue 時点の backpressure 判定は、先行 op を待つ間に陳腐化しうる。
@@ -343,8 +347,8 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripher
         return
       }
       notifyCompletions[key] = completion
-      guard opQueue.enqueue(
-        key: key, deviceId: target.deviceId, epoch: target.connectionEpoch,
+      guard enqueueOperation(
+        "notify", key: key, deviceId: target.deviceId, epoch: target.connectionEpoch,
         start: { peripheral.setNotifyValue(enabled, for: ch) }
       ) else {
         notifyCompletions.removeValue(forKey: key)
@@ -368,8 +372,8 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripher
         return
       }
       descriptorReadCompletions[key] = completion
-      guard opQueue.enqueue(
-        key: key, deviceId: target.deviceId, epoch: target.connectionEpoch,
+      guard enqueueOperation(
+        "descriptorRead", key: key, deviceId: target.deviceId, epoch: target.connectionEpoch,
         start: { peripheral.readValue(for: d) }
       ) else {
         descriptorReadCompletions.removeValue(forKey: key)
@@ -394,8 +398,8 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripher
         return
       }
       descriptorWriteCompletions[key] = completion
-      guard opQueue.enqueue(
-        key: key, deviceId: target.deviceId, epoch: target.connectionEpoch,
+      guard enqueueOperation(
+        "descriptorWrite", key: key, deviceId: target.deviceId, epoch: target.connectionEpoch,
         start: { peripheral.writeValue(value.data, for: d) }
       ) else {
         descriptorWriteCompletions.removeValue(forKey: key)
@@ -438,8 +442,8 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripher
       return
     }
     rssiCompletions[key] = completion
-    guard opQueue.enqueue(
-      key: key, deviceId: deviceId, epoch: connectionEpoch,
+    guard enqueueOperation(
+      "rssi", key: key, deviceId: deviceId, epoch: connectionEpoch,
       start: { peripheral.readRSSI() }
     ) else {
       rssiCompletions.removeValue(forKey: key)
@@ -454,6 +458,7 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripher
     let adapterState = adapterState(from: central.state)
     state.adapterStateChanged(adapterState)
     emitAdapterState(adapterState)
+    diagnostics.adapterState("\(adapterState)")
 
     guard central.state == .poweredOn else {
       // CoreBluetooth stops scans when the adapter powers off/unavailable; keep local state in sync.
@@ -520,6 +525,8 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripher
       return
     }
     // 接続が確立しないまま失敗した場合は常に connectFailed とする（§6）。
+    diagnostics.connection(deviceId: deviceId, epoch: epoch, state: "disconnected",
+                           reason: "connectFailed")
     emitConnectionState(
       deviceId: deviceId,
       epoch: epoch,
@@ -545,6 +552,8 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripher
     handleRegistry.clear(deviceId: deviceId)
     // CBError から切断 reason を導く。圏外・切断は終端理由へ縮退させない（§6）。
     let reason = ManagerStateMapping.disconnectReason(for: connectionFailure(from: error))
+    diagnostics.connection(deviceId: deviceId, epoch: epoch, state: "disconnected",
+                           reason: "\(reason)")
     emitConnectionState(
       deviceId: deviceId,
       epoch: epoch,
@@ -798,6 +807,19 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripher
     "\(deviceId)|\(epoch)|discovery"
   }
 
+  /// FIFO operation queue への投入を診断付きで行う。enqueue 成功時に os_log へ
+  /// "queued" を記録し、GATT queue を Console.app から観測できるようにする。
+  private func enqueueOperation(
+    _ kind: String, key: String, deviceId: String, epoch: Int64,
+    start: @escaping () -> Void
+  ) -> Bool {
+    let enqueued = opQueue.enqueue(key: key, deviceId: deviceId, epoch: epoch, start: start)
+    if enqueued {
+      diagnostics.operation(kind, deviceId: deviceId, epoch: epoch, phase: "queued")
+    }
+    return enqueued
+  }
+
   private func capability(of ch: CBCharacteristic) -> CharacteristicCapability {
     CharacteristicCapability(
       canRead: ch.properties.contains(.read),
@@ -849,12 +871,18 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripher
   private func rebuildHandles(peripheral: CBPeripheral) -> [ServiceMessage] {
     let deviceId = peripheral.identifier.uuidString
     handleRegistry.clear(deviceId: deviceId)
+    let epoch = state.currentEpoch(deviceId: deviceId) ?? 0
     return (peripheral.services ?? []).map { service in
       let svcHandle = handleRegistry.allocate(service, kind: .service, deviceId: deviceId)
+      diagnostics.handle(deviceId: deviceId, epoch: epoch, handle: svcHandle, attribute: "service")
       let characteristics = (service.characteristics ?? []).map { ch -> CharacteristicMessage in
         let charHandle = handleRegistry.allocate(ch, kind: .characteristic, deviceId: deviceId)
+        diagnostics.handle(deviceId: deviceId, epoch: epoch, handle: charHandle,
+                           attribute: "characteristic")
         let descriptors = (ch.descriptors ?? []).map { d -> DescriptorMessage in
           let descHandle = handleRegistry.allocate(d, kind: .descriptor, deviceId: deviceId)
+          diagnostics.handle(deviceId: deviceId, epoch: epoch, handle: descHandle,
+                             attribute: "descriptor")
           return DescriptorMessage(handle: descHandle, uuid: fullUuid(d.uuid))
         }
         return CharacteristicMessage(
