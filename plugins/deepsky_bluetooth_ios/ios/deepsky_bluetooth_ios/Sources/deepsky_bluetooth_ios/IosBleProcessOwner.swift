@@ -14,9 +14,22 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
   private var isScanning = false
   private var peripheralsByDeviceId: [String: CBPeripheral] = [:]
   private var restoredDeviceIds: [String] = []
+  private let handleRegistry = HandleRegistry()
+  private var opQueue: GattOperationQueue!
+  private var discoverCompletions: [String: (Result<[ServiceMessage], Error>) -> Void] = [:]
+  private var pendingDiscovery: [String: Int] = [:]
+  private var readCompletions: [String: (Result<FlutterStandardTypedData, Error>) -> Void] = [:]
+  private var writeCompletions: [String: (Result<Void, Error>) -> Void] = [:]
+  private var notifyCompletions: [String: (Result<Void, Error>) -> Void] = [:]
+  private var descriptorReadCompletions: [String: (Result<FlutterStandardTypedData, Error>) -> Void] = [:]
+  private var descriptorWriteCompletions: [String: (Result<Void, Error>) -> Void] = [:]
+  private var rssiCompletions: [String: (Result<Int64, Error>) -> Void] = [:]
 
   private override init() {
     super.init()
+    opQueue = GattOperationQueue(onTimeout: { [weak self] deviceId, epoch in
+      self?.handleOperationTimeout(deviceId: deviceId, epoch: epoch)
+    })
   }
 
   func registerSink(engineToken: String, callbacks: BleCallbacksApi) {
@@ -115,7 +128,7 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
       completion(.failure(BleErrorMapping.notConnected()))
       return
     }
-
+    handleRegistry.clear(deviceId: deviceId)
     if let peripheral = peripheralsByDeviceId.removeValue(forKey: deviceId) {
       central?.cancelPeripheralConnection(peripheral)
     }
@@ -134,12 +147,19 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     completion: @escaping (Result<[ServiceMessage], Error>) -> Void
   ) {
     guard state.isCurrent(deviceId: deviceId, epoch: connectionEpoch),
-          peripheralsByDeviceId[deviceId]?.state == .connected
+          let peripheral = peripheralsByDeviceId[deviceId],
+          peripheral.state == .connected
     else {
       completion(.failure(BleErrorMapping.notConnected()))
       return
     }
-    completion(.failure(BleErrorMapping.notSupported("Service discovery is not implemented in this slice")))
+    let key = discoveryKey(deviceId, connectionEpoch)
+    guard opQueue.enqueue(key: key, deviceId: deviceId, epoch: connectionEpoch) else {
+      completion(.failure(BleErrorMapping.failed("Service discovery already in progress")))
+      return
+    }
+    discoverCompletions[deviceId] = completion
+    peripheral.discoverServices(nil)
   }
 
   func readCharacteristic(
@@ -321,12 +341,182 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     else {
       return
     }
+    handleRegistry.clear(deviceId: deviceId)
     emitConnectionState(
       deviceId: deviceId,
       epoch: epoch,
       state: .disconnected,
       reason: error == nil ? .userRequested : .connectionLost
     )
+  }
+
+  // MARK: - CBPeripheralDelegate (discovery)
+
+  func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
+    let deviceId = peripheral.identifier.uuidString
+    guard discoverCompletions[deviceId] != nil else { return }
+    if let error {
+      guard let epoch = state.currentEpoch(deviceId: deviceId) else { return }
+      _ = opQueue.complete(key: discoveryKey(deviceId, epoch))
+      pendingDiscovery.removeValue(forKey: deviceId)
+      discoverCompletions.removeValue(forKey: deviceId)?(
+        .failure(BleErrorMapping.failed(error.localizedDescription)))
+      return
+    }
+    let services = peripheral.services ?? []
+    if services.isEmpty {
+      guard let epoch = state.currentEpoch(deviceId: deviceId) else { return }
+      _ = opQueue.complete(key: discoveryKey(deviceId, epoch))
+      discoverCompletions.removeValue(forKey: deviceId)?(.success([]))
+      return
+    }
+    pendingDiscovery[deviceId] = services.count
+    services.forEach { peripheral.discoverCharacteristics(nil, for: $0) }
+  }
+
+  func peripheral(
+    _ peripheral: CBPeripheral,
+    didDiscoverCharacteristicsFor service: CBService,
+    error: Error?
+  ) {
+    let deviceId = peripheral.identifier.uuidString
+    guard discoverCompletions[deviceId] != nil else { return }
+    let chars = service.characteristics ?? []
+    pendingDiscovery[deviceId, default: 0] += chars.count - 1
+    chars.forEach { peripheral.discoverDescriptors(for: $0) }
+    finishDiscoveryIfDone(peripheral, deviceId: deviceId)
+  }
+
+  func peripheral(
+    _ peripheral: CBPeripheral,
+    didDiscoverDescriptorsFor characteristic: CBCharacteristic,
+    error: Error?
+  ) {
+    let deviceId = peripheral.identifier.uuidString
+    pendingDiscovery[deviceId, default: 0] -= 1
+    finishDiscoveryIfDone(peripheral, deviceId: deviceId)
+  }
+
+  private func finishDiscoveryIfDone(_ peripheral: CBPeripheral, deviceId: String) {
+    guard pendingDiscovery[deviceId] == 0,
+          let epoch = state.currentEpoch(deviceId: deviceId),
+          let completion = discoverCompletions.removeValue(forKey: deviceId)
+    else { return }
+    pendingDiscovery.removeValue(forKey: deviceId)
+    let services = rebuildHandles(peripheral: peripheral)
+    _ = opQueue.complete(key: discoveryKey(deviceId, epoch))
+    completion(.success(services))
+  }
+
+  // MARK: - GATT ヘルパー
+
+  private func fullUuid(_ uuid: CBUUID) -> String {
+    let s = uuid.uuidString.lowercased()
+    switch s.count {
+    case 4: return "0000\(s)-0000-1000-8000-00805f9b34fb"
+    case 8: return "\(s)-0000-1000-8000-00805f9b34fb"
+    default: return s
+    }
+  }
+
+  private func charKey(_ target: CharacteristicTargetMessage) -> String {
+    "\(target.deviceId)|\(target.connectionEpoch)|\(target.characteristicHandle)"
+  }
+
+  private func charKey(_ peripheral: CBPeripheral, _ ch: CBCharacteristic) -> String? {
+    let deviceId = peripheral.identifier.uuidString
+    guard let epoch = state.currentEpoch(deviceId: deviceId),
+          let handle = handleRegistry.handle(for: ch) else { return nil }
+    return "\(deviceId)|\(epoch)|\(handle)"
+  }
+
+  private func descKey(_ target: DescriptorTargetMessage) -> String {
+    "\(target.deviceId)|\(target.connectionEpoch)|\(target.characteristicHandle)|\(target.descriptorHandle)"
+  }
+
+  private func descKey(_ peripheral: CBPeripheral, _ d: CBDescriptor) -> String? {
+    guard let ch = d.characteristic else { return nil }
+    let deviceId = peripheral.identifier.uuidString
+    guard let epoch = state.currentEpoch(deviceId: deviceId),
+          let charHandle = handleRegistry.handle(for: ch),
+          let descHandle = handleRegistry.handle(for: d) else { return nil }
+    return "\(deviceId)|\(epoch)|\(charHandle)|\(descHandle)"
+  }
+
+  private func rssiKey(_ deviceId: String, _ epoch: Int64) -> String {
+    "\(deviceId)|\(epoch)|rssi"
+  }
+
+  private func discoveryKey(_ deviceId: String, _ epoch: Int64) -> String {
+    "\(deviceId)|\(epoch)|discovery"
+  }
+
+  private func findCharacteristic(
+    _ target: CharacteristicTargetMessage
+  ) -> Result<(CBPeripheral, CBCharacteristic), Error> {
+    guard state.isCurrent(deviceId: target.deviceId, epoch: target.connectionEpoch),
+          let peripheral = peripheralsByDeviceId[target.deviceId],
+          peripheral.state == .connected
+    else {
+      return .failure(BleErrorMapping.notConnected())
+    }
+    guard let ch = handleRegistry.characteristic(
+      handle: target.characteristicHandle, deviceId: target.deviceId) as? CBCharacteristic
+    else {
+      return .failure(BleErrorMapping.notFound(
+        "Characteristic handle \(target.characteristicHandle) not found"))
+    }
+    return .success((peripheral, ch))
+  }
+
+  private func findDescriptor(
+    _ target: DescriptorTargetMessage
+  ) -> Result<(CBPeripheral, CBDescriptor), Error> {
+    guard state.isCurrent(deviceId: target.deviceId, epoch: target.connectionEpoch),
+          let peripheral = peripheralsByDeviceId[target.deviceId],
+          peripheral.state == .connected
+    else {
+      return .failure(BleErrorMapping.notConnected())
+    }
+    guard let d = handleRegistry.descriptor(
+      handle: target.descriptorHandle, deviceId: target.deviceId) as? CBDescriptor
+    else {
+      return .failure(BleErrorMapping.notFound(
+        "Descriptor handle \(target.descriptorHandle) not found"))
+    }
+    return .success((peripheral, d))
+  }
+
+  private func rebuildHandles(peripheral: CBPeripheral) -> [ServiceMessage] {
+    let deviceId = peripheral.identifier.uuidString
+    handleRegistry.clear(deviceId: deviceId)
+    return (peripheral.services ?? []).map { service in
+      let svcHandle = handleRegistry.allocate(service, kind: .service, deviceId: deviceId)
+      let characteristics = (service.characteristics ?? []).map { ch -> CharacteristicMessage in
+        let charHandle = handleRegistry.allocate(ch, kind: .characteristic, deviceId: deviceId)
+        let descriptors = (ch.descriptors ?? []).map { d -> DescriptorMessage in
+          let descHandle = handleRegistry.allocate(d, kind: .descriptor, deviceId: deviceId)
+          return DescriptorMessage(handle: descHandle, uuid: fullUuid(d.uuid))
+        }
+        return CharacteristicMessage(
+          handle: charHandle,
+          serviceHandle: svcHandle,
+          uuid: fullUuid(ch.uuid),
+          canRead: ch.properties.contains(.read),
+          canWriteWithResponse: ch.properties.contains(.write),
+          canWriteWithoutResponse: ch.properties.contains(.writeWithoutResponse),
+          canNotify: ch.properties.contains(.notify),
+          canIndicate: ch.properties.contains(.indicate),
+          descriptors: descriptors
+        )
+      }
+      return ServiceMessage(handle: svcHandle, uuid: fullUuid(service.uuid),
+                            characteristics: characteristics)
+    }
+  }
+
+  private func handleOperationTimeout(deviceId: String, epoch: Int64) {
+    // Placeholder — full implementation in Task 5
   }
 
   private var activeCallbacks: BleCallbacksApi? {
