@@ -14,6 +14,9 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
   private var isScanning = false
   private var peripheralsByDeviceId: [String: CBPeripheral] = [:]
   private var restoredDeviceIds: [String] = []
+  private var restoredServices: [String: [ServiceMessage]] = [:]
+  private var restoredNotifyHandles: [String: [Int64]] = [:]
+  private let restorationBuffer = RestorationEventBuffer<RestorationDeferredEvent>()
   private let handleRegistry = HandleRegistry()
   private var opQueue: GattOperationQueue!
   private var discoverCompletions: [String: (Result<[ServiceMessage], Error>) -> Void] = [:]
@@ -24,6 +27,14 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
   private var descriptorReadCompletions: [String: (Result<FlutterStandardTypedData, Error>) -> Void] = [:]
   private var descriptorWriteCompletions: [String: (Result<Void, Error>) -> Void] = [:]
   private var rssiCompletions: [String: (Result<Int64, Error>) -> Void] = [:]
+
+  /// 復元中に到着し、snapshot/ack 後まで配送を遅延させる delegate event。
+  private enum RestorationDeferredEvent {
+    case connectionState(
+      deviceId: String, epoch: Int64, state: ConnectionStateMessage,
+      reason: DisconnectReasonMessage?)
+    case characteristicValue(deviceId: String, epoch: Int64, handle: Int64, data: Data)
+  }
 
   private override init() {
     super.init()
@@ -52,15 +63,19 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     activeEngineToken = engineToken
     emitCurrentAdapterState()
     emitStateResync()
-    if !restoredDeviceIds.isEmpty {
-      activeCallbacks?.onRestoredConnections(deviceIds: restoredDeviceIds) { _ in }
-    }
   }
 
   func ackStateResync(engineToken: String, snapshotId: String) {
     if callbacksByEngine[engineToken] != nil {
       activeEngineToken = engineToken
     }
+    // §13: snapshot ready / ack 後に restoredConnections を通知し、
+    // 続けて復元中に保持した delegate event を到着順で flush する。
+    if !restoredDeviceIds.isEmpty {
+      activeCallbacks?.onRestoredConnections(deviceIds: restoredDeviceIds) { _ in }
+      restoredDeviceIds = []
+    }
+    flushRestorationBuffer()
   }
 
   func startScan(filter: ScanFilterMessage?, settings: DarwinScanSettingsMessage) throws {
@@ -131,6 +146,7 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     opQueue.cancelAll(deviceId: deviceId, epoch: connectionEpoch)
     failPendingOperations(deviceId: deviceId, error: BleErrorMapping.notConnected())
     handleRegistry.clear(deviceId: deviceId)
+    clearRestoredCache(deviceId: deviceId)
     if let peripheral = peripheralsByDeviceId.removeValue(forKey: deviceId) {
       central?.cancelPeripheralConnection(peripheral)
     }
@@ -345,6 +361,9 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     callbacksByEngine.removeAll()
     activeEngineToken = nil
     restoredDeviceIds.removeAll()
+    restoredServices.removeAll()
+    restoredNotifyHandles.removeAll()
+    _ = restorationBuffer.flush()
   }
 
   func centralManagerDidUpdateState(_ central: CBCentralManager) {
@@ -369,6 +388,8 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
   ) {
     let restored = dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral] ?? []
     restoredDeviceIds = restored.map(\.identifier.uuidString)
+    // 復元中に届く delegate event は snapshot/ack 後まで保持する（§13）。
+    restorationBuffer.begin()
     for peripheral in restored {
       let deviceId = peripheral.identifier.uuidString
       peripheral.delegate = self
@@ -376,6 +397,12 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
       let attempt = state.connectRequested(deviceId: deviceId)
       let connectionState = connectionState(from: peripheral.state)
       _ = state.acceptCallback(deviceId: deviceId, epoch: attempt.epoch, state: connectionState)
+      // 探索済みの GATT tree と active notify handle を復元する。
+      // 復元情報がなければ services は nil のままにし、Dart 側で再探索させる（§13）。
+      if let services = peripheral.services, !services.isEmpty {
+        restoredServices[deviceId] = rebuildHandles(peripheral: peripheral)
+        restoredNotifyHandles[deviceId] = computeRestoredNotifyHandles(peripheral: peripheral)
+      }
     }
   }
 
@@ -452,6 +479,7 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     opQueue.cancelAll(deviceId: deviceId, epoch: epoch)
     failPendingOperations(deviceId: deviceId, error: BleErrorMapping.notConnected())
     handleRegistry.clear(deviceId: deviceId)
+    clearRestoredCache(deviceId: deviceId)
     emitConnectionState(
       deviceId: deviceId,
       epoch: epoch,
@@ -535,6 +563,8 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     else { return }
     pendingDiscovery.removeValue(forKey: deviceId)
     let services = rebuildHandles(peripheral: peripheral)
+    // 新規探索は復元 snapshot を上書きするため、復元キャッシュを破棄する。
+    clearRestoredCache(deviceId: deviceId)
     _ = opQueue.complete(key: discoveryKey(deviceId, epoch))
     completion(.success(services))
   }
@@ -656,6 +686,11 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     let deviceId = peripheral.identifier.uuidString
     guard let epoch = state.currentEpoch(deviceId: deviceId),
           let handle = handleRegistry.handle(for: ch) else { return }
+    // 復元中は配送を遅延させ、snapshot/ack 後に順序を保って flush する（§13）。
+    if restorationBuffer.enqueueIfBuffering(
+      .characteristicValue(deviceId: deviceId, epoch: epoch, handle: handle, data: data)) {
+      return
+    }
     activeCallbacks?.onCharacteristicValue(
       deviceId: deviceId,
       connectionEpoch: epoch,
@@ -782,6 +817,24 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     }
   }
 
+  /// 復元した peripheral の探索済み characteristic から active notify handle を抽出する。
+  /// `rebuildHandles` で handle を採番した後に呼ぶ。
+  private func computeRestoredNotifyHandles(peripheral: CBPeripheral) -> [Int64] {
+    let entries: [(handle: Int64, isNotifying: Bool)] = (peripheral.services ?? [])
+      .flatMap { $0.characteristics ?? [] }
+      .compactMap { ch in
+        guard let handle = handleRegistry.handle(for: ch) else { return nil }
+        return (handle: handle, isNotifying: ch.isNotifying)
+      }
+    return RestorationDecisions.activeNotifyHandles(from: entries)
+  }
+
+  /// 復元 snapshot のキャッシュを破棄する。再探索・切断・dispose で呼ぶ。
+  private func clearRestoredCache(deviceId: String) {
+    restoredServices.removeValue(forKey: deviceId)
+    restoredNotifyHandles.removeValue(forKey: deviceId)
+  }
+
   // MARK: - タイムアウト
 
   private func failPendingOperations(deviceId: String, error: Error) {
@@ -817,6 +870,7 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
       central?.cancelPeripheralConnection(peripheral)
     }
     handleRegistry.clear(deviceId: deviceId)
+    clearRestoredCache(deviceId: deviceId)
     emitConnectionState(
       deviceId: deviceId, epoch: epoch,
       state: .disconnected, reason: .operationTimeout
@@ -883,6 +937,11 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     state: ConnectionStateMessage,
     reason: DisconnectReasonMessage?
   ) {
+    // 復元中は配送を遅延させ、snapshot/ack 後に順序を保って flush する（§13）。
+    if restorationBuffer.enqueueIfBuffering(
+      .connectionState(deviceId: deviceId, epoch: epoch, state: state, reason: reason)) {
+      return
+    }
     activeCallbacks?.onConnectionStateChanged(
       deviceId: deviceId,
       connectionEpoch: epoch,
@@ -891,15 +950,39 @@ final class IosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheral
     ) { _ in }
   }
 
+  private func flushRestorationBuffer() {
+    for event in restorationBuffer.flush() {
+      switch event {
+      case let .connectionState(deviceId, epoch, state, reason):
+        activeCallbacks?.onConnectionStateChanged(
+          deviceId: deviceId,
+          connectionEpoch: epoch,
+          state: state,
+          disconnectReason: reason
+        ) { _ in }
+      case let .characteristicValue(deviceId, epoch, handle, data):
+        activeCallbacks?.onCharacteristicValue(
+          deviceId: deviceId,
+          connectionEpoch: epoch,
+          characteristicHandle: handle,
+          value: FlutterStandardTypedData(bytes: data)
+        ) { _ in }
+      }
+    }
+  }
+
   private func emitStateResync() {
-    let devices = state.snapshots.map { snapshot in
-      StateSnapshotMessage(
+    // 復元 device は device ID 一覧へ縮退させず、GATT tree・active notify handle・
+    // disconnect reason を含む完全 snapshot を送る（§13）。
+    let devices = state.snapshots.map { snapshot -> StateSnapshotMessage in
+      let stateMessage = connectionStateMessage(from: snapshot.state)
+      return StateSnapshotMessage(
         deviceId: snapshot.deviceId,
         connectionEpoch: snapshot.epoch,
-        state: connectionStateMessage(from: snapshot.state),
-        disconnectReason: nil,
-        activeNotifyHandles: [],
-        services: nil,
+        state: stateMessage,
+        disconnectReason: RestorationDecisions.disconnectReason(for: stateMessage),
+        activeNotifyHandles: restoredNotifyHandles[snapshot.deviceId] ?? [],
+        services: restoredServices[snapshot.deviceId],
         restored: restoredDeviceIds.contains(snapshot.deviceId)
       )
     }
