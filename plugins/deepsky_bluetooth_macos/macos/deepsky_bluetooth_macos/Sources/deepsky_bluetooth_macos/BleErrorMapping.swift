@@ -12,6 +12,7 @@ enum BleErrorCode {
   static let readAmbiguousWhileNotifying = "readAmbiguousWhileNotifying"
   static let bufferFull = "bufferFull"
   static let operationTimeout = "operationTimeout"
+  static let backgroundNotSupported = "backgroundNotSupported"
 }
 
 func bleError(_ code: String, _ message: String) -> PigeonError {
@@ -62,5 +63,10 @@ enum BleErrorMapping {
 
   static func operationTimeout() -> PigeonError {
     bleError(BleErrorCode.operationTimeout, "GATT operation timed out")
+  }
+
+  static func backgroundNotSupported() -> PigeonError {
+    bleError(BleErrorCode.backgroundNotSupported,
+             "Background mode is not supported on macOS")
   }
 }

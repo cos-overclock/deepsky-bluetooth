@@ -7,7 +7,8 @@ import Foundation
 /// Issue #35: scan/filter・connect/cancel・adapter state・epoch 採番と callback guard。
 /// Issue #36: GATT discovery・HandleRegistry・FIFO operation queue・timeout 接続破棄と
 /// read/write/notify/descriptor/RSSI の queue 接続。
-/// read/notify 共通 callback の契約・strictRead・backpressure・background 拒否は #37、
+/// Issue #37: read/notify 共通 callback の契約（routing と read→values 配送）・strictRead
+/// 曖昧性・writeWithoutResponse backpressure→bufferFull・background 初期化拒否。
 /// Observer・error mapping・plugin/Pigeon 配線は #38 で追加する。
 final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
   static let shared = MacosBleProcessOwner()
@@ -38,6 +39,19 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripher
   }
 
   // MARK: - Sink / lifecycle
+
+  /// macOS は CoreBluetooth の background 実行に対応しないため、background 指定の初期化は
+  /// backgroundNotSupported として拒否する（§14）。foreground 指定は central を起こすだけ。
+  func initialize(isBackground: Bool) throws -> String {
+    switch GattOperationDecisions.initializeDecision(isBackground: isBackground) {
+    case .backgroundNotSupported:
+      throw BleErrorMapping.backgroundNotSupported()
+    case .proceed:
+      break
+    }
+    ensureCentral()
+    return activeEngineToken ?? ""
+  }
 
   func registerSink(engineToken: String, callbacks: BleCallbacksApi) {
     callbacksByEngine[engineToken] = callbacks
@@ -192,9 +206,8 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripher
     }
   }
 
-  /// strictRead による read/notify 曖昧性の判定と、通常 read を戻り値と values の
-  /// 両系統へ配送する read/notify 共通契約は #37 で実装する。#36 では capability を
-  /// 満たす read を FIFO queue へ流し、戻り値だけを返す。
+  /// strictRead による read/notify 曖昧性を判定し、capability を満たす read を FIFO queue へ
+  /// 流す。通常 read の戻り値完了と values 配送の両系統は didUpdateValueFor で routing する（§10）。
   func readCharacteristic(
     target: CharacteristicTargetMessage,
     strictRead: Bool,
@@ -204,9 +217,16 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripher
     case .failure(let e):
       completion(.failure(e))
     case .success(let (peripheral, ch)):
-      guard ch.properties.contains(.read) else {
+      switch GattOperationDecisions.readDecision(
+        strictRead: strictRead, capability: capability(of: ch)) {
+      case .notSupported:
         completion(.failure(BleErrorMapping.notSupported("Read not supported")))
         return
+      case .ambiguousWhileNotifying:
+        completion(.failure(BleErrorMapping.readAmbiguousWhileNotifying()))
+        return
+      case .proceed:
+        break
       }
       let key = charKey(target)
       guard !opQueue.contains(key: key) else {
@@ -225,7 +245,10 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripher
     }
   }
 
-  /// writeWithoutResponse の backpressure を buffer-full へ mapping する処理は #37 で実装する。
+  /// writeWithResponse は capability を満たすと FIFO queue へ流す。writeWithoutResponse は
+  /// backpressure（canSendWriteWithoutResponse == false）を bufferFull へ mapping する。
+  /// enqueue 時点の判定は先行 op を待つ間に陳腐化しうるため、送信直前（start クロージャ内）
+  /// でも再チェックし、その時点で送信不可なら bufferFull で失敗完了する。
   func writeCharacteristic(
     target: CharacteristicTargetMessage,
     value: FlutterStandardTypedData,
@@ -236,11 +259,18 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripher
     case .failure(let e):
       completion(.failure(e))
     case .success(let (peripheral, ch)):
-      if withResponse {
-        guard ch.properties.contains(.write) else {
-          completion(.failure(BleErrorMapping.notSupported("Write with response not supported")))
-          return
-        }
+      switch GattOperationDecisions.writeDecision(
+        withResponse: withResponse,
+        capability: capability(of: ch),
+        canSendWithoutResponse: peripheral.canSendWriteWithoutResponse) {
+      case .notSupported:
+        let message = withResponse
+          ? "Write with response not supported"
+          : "Write without response not supported"
+        completion(.failure(BleErrorMapping.notSupported(message)))
+      case .bufferFull:
+        completion(.failure(BleErrorMapping.bufferFull()))
+      case .proceedWithResponse:
         let key = charKey(target)
         guard !opQueue.contains(key: key) else {
           completion(.failure(BleErrorMapping.failed("A write for this characteristic is already in flight")))
@@ -255,11 +285,7 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripher
           completion(.failure(BleErrorMapping.failed("A write for this characteristic is already in flight")))
           return
         }
-      } else {
-        guard ch.properties.contains(.writeWithoutResponse) else {
-          completion(.failure(BleErrorMapping.notSupported("Write without response not supported")))
-          return
-        }
+      case .proceedWithoutResponse:
         let key = charKey(target)
         guard !opQueue.contains(key: key) else {
           completion(.failure(BleErrorMapping.failed("A write for this characteristic is already in flight")))
@@ -269,8 +295,18 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripher
         guard opQueue.enqueue(
           key: key, deviceId: target.deviceId, epoch: target.connectionEpoch,
           start: { [weak self] in
-            peripheral.writeValue(value.data, for: ch, type: .withoutResponse)
-            self?.writeCompletions.removeValue(forKey: key)?(.success(()))
+            guard let self else { return }
+            // enqueue 時点の backpressure 判定は、先行 op を待つ間に陳腐化しうる。
+            // 送信直前に再チェックし、buffer full なら withoutResponse を送らず bufferFull で
+            // 失敗完了する（§10 の backpressure 契約）。
+            let canSend = peripheral.canSendWriteWithoutResponse
+            if canSend {
+              peripheral.writeValue(value.data, for: ch, type: .withoutResponse)
+            }
+            let result: Result<Void, Error> = canSend
+              ? .success(())
+              : .failure(BleErrorMapping.bufferFull())
+            self.writeCompletions.removeValue(forKey: key)?(result)
             DispatchQueue.main.async { [weak self] in
               _ = self?.opQueue.complete(key: key)
             }
@@ -294,9 +330,12 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripher
       completion(.failure(e))
     case .success(let (peripheral, ch)):
       let enabled = type != .disable
-      guard ch.properties.contains(.notify) || ch.properties.contains(.indicate) else {
+      switch GattOperationDecisions.notifyDecision(capability: capability(of: ch)) {
+      case .notSupported:
         completion(.failure(BleErrorMapping.notSupported("Notify/Indicate not supported")))
         return
+      case .proceed:
+        break
       }
       let key = charKey(target)
       guard !opQueue.contains(key: key) else {
@@ -595,14 +634,25 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripher
     error: Error?
   ) {
     guard let key = charKey(peripheral, characteristic) else { return }
-    // pending read がある更新だけを read 戻り値として完了させる。
-    // pending read が無い更新（notify）の values 配送と read/notify 共通契約は #37 で実装する。
-    guard let completion = readCompletions.removeValue(forKey: key) else { return }
-    _ = opQueue.complete(key: key)
-    if let error {
-      completion(.failure(BleErrorMapping.failed(error.localizedDescription)))
-    } else {
-      completion(.success(FlutterStandardTypedData(bytes: characteristic.value ?? Data())))
+    let data = characteristic.value ?? Data()
+    let hasPendingRead = readCompletions[key] != nil
+    // CoreBluetooth は read 応答と notify を同じ callback で返すため、pending read の
+    // 有無と error から配送先を決める（§10）。
+    switch GattOperationDecisions.readCallbackRouting(
+      hasPendingRead: hasPendingRead, hasError: error != nil) {
+    case .completeReadSuccessThenEmit:
+      _ = opQueue.complete(key: key)
+      readCompletions.removeValue(forKey: key)?(.success(FlutterStandardTypedData(bytes: data)))
+      // Review guide §10: 通常 read は戻り値完了に加えて同じ値を values にも流す。
+      emitCharacteristicValue(peripheral, characteristic, data: data)
+    case .completeReadFailure:
+      _ = opQueue.complete(key: key)
+      readCompletions.removeValue(forKey: key)?(
+        .failure(BleErrorMapping.failed(error?.localizedDescription ?? "Read failed")))
+    case .emitNotify:
+      emitCharacteristicValue(peripheral, characteristic, data: data)
+    case .ignore:
+      break
     }
   }
 
@@ -687,6 +737,24 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripher
     }
   }
 
+  /// notify/indicate 値および通常 read の値を values stream へ配送する。
+  /// macOS は state restoration を持たないため、復元中バッファリングは行わない。
+  private func emitCharacteristicValue(
+    _ peripheral: CBPeripheral,
+    _ ch: CBCharacteristic,
+    data: Data
+  ) {
+    let deviceId = peripheral.identifier.uuidString
+    guard let epoch = state.currentEpoch(deviceId: deviceId),
+          let handle = handleRegistry.handle(for: ch) else { return }
+    activeCallbacks?.onCharacteristicValue(
+      deviceId: deviceId,
+      connectionEpoch: epoch,
+      characteristicHandle: handle,
+      value: FlutterStandardTypedData(bytes: data)
+    ) { _ in }
+  }
+
   // MARK: - GATT helpers
 
   private func fullUuid(_ uuid: CBUUID) -> String {
@@ -728,6 +796,17 @@ final class MacosBleProcessOwner: NSObject, CBCentralManagerDelegate, CBPeripher
 
   private func discoveryKey(_ deviceId: String, _ epoch: Int64) -> String {
     "\(deviceId)|\(epoch)|discovery"
+  }
+
+  private func capability(of ch: CBCharacteristic) -> CharacteristicCapability {
+    CharacteristicCapability(
+      canRead: ch.properties.contains(.read),
+      canWriteWithResponse: ch.properties.contains(.write),
+      canWriteWithoutResponse: ch.properties.contains(.writeWithoutResponse),
+      canNotify: ch.properties.contains(.notify),
+      canIndicate: ch.properties.contains(.indicate),
+      isNotifying: ch.isNotifying
+    )
   }
 
   private func findCharacteristic(
