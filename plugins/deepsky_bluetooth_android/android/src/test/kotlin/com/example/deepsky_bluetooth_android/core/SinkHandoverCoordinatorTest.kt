@@ -148,6 +148,24 @@ internal class SinkHandoverCoordinatorTest {
     }
 
     @Test
+    fun connectionStateBeforeSnapshotContinuesToActiveSink() {
+        val coordinator = coordinator()
+        coordinator.attachCandidate("headless")
+        coordinator.ackStateResync("headless", coordinator.onDartReady("headless")!!.snapshotId)
+
+        coordinator.attachCandidate("ui")
+
+        assertTrue(
+            coordinator.recordConnectionState(
+                deviceId = "AA:BB:CC:DD:EE:FF",
+                connectionEpoch = 1,
+                state = ConnectionStateMessage.CONNECTED,
+                disconnectReason = null,
+            ).deliverImmediately,
+        )
+    }
+
+    @Test
     fun resetClearsActiveCandidateAndSnapshots() {
         val coordinator = coordinator()
         coordinator.recordConnectionState(

@@ -218,7 +218,7 @@ internal class SinkHandoverCoordinator(
 
     private fun shouldDeliverImmediately(): Boolean = activeToken != null && !isInHandover()
 
-    private fun isInHandover(): Boolean = candidateToken != null
+    private fun isInHandover(): Boolean = isAwaitingAck()
 
     private fun isAwaitingAck(): Boolean = candidateToken != null && pendingSnapshotId != null
 
